@@ -1,0 +1,358 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#050408">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <title>Sakura Anime — Аниме онлайн</title>
+  <link rel="icon" type="image/png" href="assets/logo-dark.png">
+  <link rel="stylesheet" href="css/anilibria.css">
+</head>
+<body>
+
+<!-- Particle canvas -->
+<canvas id="particleCanvas"></canvas>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ══════════════════════════════════════════
+     MAIN APP
+════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── Top Header ───────────────────────────────────────── -->
+  <header class="ani-header">
+
+    <div class="ani-header-left">
+      <!-- Back to Sakura Cinema -->
+      <a class="back-btn" href="javascript:void(0)" onclick="window.history.back()" title="Назад в Sakura Cinema">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Назад
+      </a>
+
+      <!-- Brand -->
+      <a class="ani-brand" href="index.html">
+        <div class="ani-brand-icon">
+          <img src="assets/logo-dark.png" alt="Sakura Cinema" class="ani-brand-logo">
+        </div>
+        <div>
+          <div class="ani-brand-name">Sakura Anime</div>
+          <div class="ani-brand-sub">桜アニメ</div>
+        </div>
+      </a>
+    </div>
+
+    <!-- Search -->
+    <div class="ani-search-wrap">
+      <form class="ani-search-form" id="aniSearchForm" autocomplete="off">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          type="text"
+          id="aniSearchInput"
+          class="ani-search-input"
+          placeholder="Поиск аниме..."
+          spellcheck="false"
+        >
+        <button type="button" class="ani-search-clear" id="aniSearchClear" aria-label="Очистить">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- Right controls -->
+    <div class="ani-header-right">
+      <div class="ani-view-toggle">
+        <button class="view-btn active" id="viewGrid" title="Сетка" aria-label="Вид сетка">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+          </svg>
+        </button>
+        <button class="view-btn" id="viewList" title="Список" aria-label="Вид список">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </header>
+
+  <!-- ── Hero Slider ───────────────────────────────────────── -->
+  <section class="ani-hero" id="aniHero">
+    <div class="hero-bg" id="heroBg"></div>
+    <div class="hero-gradient"></div>
+
+    <div class="hero-content">
+      <div class="hero-badges" id="heroBadges"></div>
+      <h1 class="hero-title" id="heroTitle">Загрузка...</h1>
+      <div class="hero-title-en" id="heroTitleEn"></div>
+      <p class="hero-desc" id="heroDesc"></p>
+      <div class="hero-genres" id="heroGenres"></div>
+      <div class="hero-actions">
+        <button class="hero-play-btn" id="heroPlayBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          Смотреть
+        </button>
+        <button class="hero-info-btn" id="heroInfoBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Подробнее
+        </button>
+      </div>
+    </div>
+
+    <!-- Arrow nav -->
+    <button class="hero-prev" id="heroPrev" aria-label="Предыдущее">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="hero-next" id="heroNext" aria-label="Следующее">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <div class="hero-dots" id="heroDots"></div>
+  </section>
+
+  <!-- ── Genre filter bar ──────────────────────────────────── -->
+  <div class="ani-content" style="padding-bottom:0;padding-top:20px">
+    <div class="genre-filter-bar" id="genreFilterBar">
+      <button class="gf-pill active" data-all>Все</button>
+      <!-- Dynamic genre pills injected here by JS -->
+    </div>
+  </div>
+
+  <!-- ── Main layout (sidebar + content) ──────────────────── -->
+  <div class="ani-main">
+
+    <!-- Sidebar -->
+    <aside class="ani-sidebar">
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Навигация</div>
+        <ul class="sidebar-nav">
+          <li>
+            <button class="sidebar-nav-item active" id="navLatest">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Новинки
+            </button>
+          </li>
+          <li>
+            <button class="sidebar-nav-item" id="navOngoing">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              Онгоинги
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Жанры</div>
+        <div class="genre-pills" id="sidebarGenres">
+          <!-- Dynamic genres injected by JS -->
+          <div style="padding:12px;font-size:12px;color:#475569">Загрузка жанров...</div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Content -->
+    <main class="ani-content">
+
+      <!-- Section header -->
+      <div class="section-header">
+        <div>
+          <div class="section-title">
+            <img class="title-logo" src="assets/logo-dark.png" alt="Sakura Cinema">
+            <span id="sectionMainTitle">Новинки аниме</span>
+          </div>
+          <div class="section-subtitle" id="sectionSubtitle">Последние вышедшие серии</div>
+        </div>
+      </div>
+
+      <!-- Cards grid -->
+      <div class="cards-grid" id="cardsGrid">
+        <!-- Dynamic content by JS -->
+      </div>
+
+      <!-- Load more -->
+      <div class="load-more-wrap">
+        <button class="load-more-btn" id="loadMoreBtn" style="display:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          Загрузить ещё
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+</div><!-- /#app -->
+
+
+<!-- ══════════════════════════════════════════
+     PLAYER MODAL
+════════════════════════════════════════════ -->
+<div class="player-modal-backdrop" id="playerBackdrop">
+  <div class="player-modal">
+
+    <!-- Modal header -->
+    <div class="player-modal-header">
+      <button class="player-close-btn" id="playerCloseBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+        Закрыть
+      </button>
+      <div class="player-modal-title" id="playerModalTitle">Просмотр</div>
+    </div>
+
+    <!-- Video section -->
+    <div class="player-video-section">
+      <div class="player-video-wrap" id="playerVideoWrap">
+        <video
+          id="animeVideoPlayer"
+          playsinline
+          crossorigin="anonymous"
+        ></video>
+        <div class="custom-player-topbar">
+          <div class="custom-player-now" id="customPlayerNow">Просмотр серии</div>
+          <button class="custom-player-btn" id="customCloseBtn" type="button" aria-label="Закрыть плеер">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="custom-player-controls" id="customPlayerControls">
+          <input class="custom-player-progress" id="customPlayerProgress" type="range" min="0" max="1000" value="0" aria-label="Позиция воспроизведения">
+          <div class="custom-player-row">
+            <button class="custom-player-btn" id="customPlayBtn" type="button" aria-label="Воспроизвести">
+              <svg class="play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+            </button>
+            <button class="custom-player-btn" id="customBackBtn" type="button" aria-label="Назад на 10 секунд">−10</button>
+            <button class="custom-player-btn" id="customForwardBtn" type="button" aria-label="Вперёд на 10 секунд">+10</button>
+            <button class="custom-player-btn" id="customMuteBtn" type="button" aria-label="Выключить звук">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+            </button>
+            <input class="custom-player-volume" id="customPlayerVolume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость">
+            <span class="custom-player-time" id="customPlayerTime">0:00 / 0:00</span>
+            <button class="custom-player-speed" id="customPlayerSpeed" type="button" aria-label="Скорость">1x</button>
+            <button class="custom-player-next" id="customNextBtn" type="button">Следующая серия</button>
+            <div class="custom-quality">
+              <button class="custom-quality-btn" id="customQualityBtn" type="button" aria-haspopup="menu" aria-expanded="false">
+                <span id="customQualityText">720p</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="custom-quality-menu" id="customQualityMenu" role="menu">
+                <button type="button" role="menuitem" data-quality="480">480p</button>
+                <button type="button" role="menuitem" data-quality="720">720p</button>
+                <button type="button" role="menuitem" data-quality="1080">1080p</button>
+              </div>
+            </div>
+            <button class="custom-player-btn custom-player-fullscreen" id="customFullscreenBtn" type="button" aria-label="Полный экран">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- Spinner overlay -->
+        <div class="player-spinner" id="playerSpinner">
+          <div class="spinner-ring"></div>
+        </div>
+      </div>
+
+      <!-- Controls bar: quality + episode nav -->
+      <div class="player-controls-bar">
+        <div class="player-ep-nav">
+          <button class="ep-nav-btn" id="epPrevBtn" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Пред.
+          </button>
+          <span class="ep-counter" id="epCounter">— / —</span>
+          <button class="ep-nav-btn" id="epNextBtn">
+            След.
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player body: info panel + episodes -->
+    <div class="player-body">
+
+      <!-- Left: Anime info -->
+      <div class="player-info-panel">
+
+        <div class="detail-poster-wrap">
+          <img class="detail-poster" id="detailPoster" src="" alt="" loading="lazy">
+        </div>
+
+        <div class="detail-title" id="detailTitle"></div>
+        <div class="detail-title-en" id="detailTitleEn"></div>
+
+        <div class="detail-meta-row" id="detailMeta"></div>
+
+        <div class="detail-genres" id="detailGenres"></div>
+
+        <div class="detail-desc-label">Описание</div>
+        <div class="detail-desc" id="detailDesc"></div>
+        <button class="detail-desc-toggle" id="detailDescToggle">Читать ещё</button>
+
+        <div class="detail-stats">
+          <div class="detail-stat">
+            <span class="detail-stat-val" id="statWatching">—</span>
+            <div class="detail-stat-lbl">Смотрят</div>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-val" id="statFavs">—</span>
+            <div class="detail-stat-lbl">В избранном</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right: Episodes list -->
+      <div class="player-episodes-panel">
+
+        <div class="episodes-header">
+          <div class="episodes-title">📺 Серии</div>
+          <div class="episodes-count" id="episodesCount">...</div>
+        </div>
+
+        <div class="episodes-list" id="episodesList">
+          <!-- Dynamic episodes by JS -->
+        </div>
+
+      </div>
+
+    </div><!-- /.player-body -->
+
+  </div><!-- /.player-modal -->
+</div><!-- /.player-modal-backdrop -->
+
+
+<!-- Scripts -->
+<script src="js/hls.min.js"></script>
+<script src="js/anilibria.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
+
+</body>
+</html>
