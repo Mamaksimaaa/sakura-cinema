@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sakura Anime — anilibria.js
  * Full anime catalog + HLS player engine for Sakura Cinema Browser
  * API: https://anilibria.top/api/v1
@@ -721,6 +721,21 @@ const ANI = {
       const wrap = document.getElementById('playerVideoWrap');
       if (!document.fullscreenElement) wrap?.requestFullscreen?.();
       else document.exitFullscreen?.();
+    });
+
+    // Кнопка масштаба: contain <-> cover
+    const fitBtn = document.getElementById('customFitBtn');
+    const fitIconContain = document.getElementById('fitIconContain');
+    const fitIconCover   = document.getElementById('fitIconCover');
+    let isCover = false;
+    fitBtn?.addEventListener('click', () => {
+      isCover = !isCover;
+      const v = document.getElementById('animeVideoPlayer');
+      if (v) v.classList.toggle('fit-cover', isCover);
+      fitBtn.classList.toggle('active', isCover);
+      if (fitIconContain) fitIconContain.style.display = isCover ? 'none'  : '';
+      if (fitIconCover)   fitIconCover.style.display   = isCover ? ''      : 'none';
+      fitBtn.title = isCover ? 'Масштаб: на весь экран (нажми чтобы вписать)' : 'Масштаб: вписать / на весь экран';
     });
     speedBtn?.addEventListener('click', () => {
       if (!video) return;
