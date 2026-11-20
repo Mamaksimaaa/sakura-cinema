@@ -1,0 +1,19 @@
+{
+  "name": "Sakura Cinema",
+  "short_name": "Sakura",
+  "description": "Аниме и кино в стиле Sakura Cinema",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050408",
+  "theme_color": "#050408",
+  "icons": [
+    {
+      "src": "assets/logo-dark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
