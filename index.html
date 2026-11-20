@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#050408">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <title>Sakura Cinema Browser 🌸 — Аниме-браузер & Кинотеатр</title>
+  
+  <!-- Favicon SVG -->
+  <link rel="icon" type="image/png" href="assets/logo-dark.png">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-dream-chaser">
+
+  <!-- Video Wallpaper Background Layer -->
+  <div class="bg-video-container active" id="bgVideoContainer">
+    <video id="bgVideoWallpaper" class="bg-video-wallpaper" src="assets/dream-chaser.mp4" autoplay loop muted playsinline></video>
+    <div class="bg-dark-vignette"></div>
+  </div>
+
+  <!-- Interactive Dynamic Particle Background (Sakura Petals / Cyberpunk Rain / Fireflies) -->
+  <canvas id="particleCanvas"></canvas>
+
+  <!-- Cinema Mode Dim Backdrop -->
+  <div class="cinema-dim-overlay" id="cinemaOverlay" title="Нажмите, чтобы включить свет"></div>
+
+  <!-- Main Application Container -->
+  <div class="app-container">
+
+    <!-- Top Navigation Header -->
+    <header class="main-header glass-panel">
+      <!-- Logo & Brand -->
+      <a href="#" class="logo-group">
+        <div class="logo-icon-wrap">
+          <img src="assets/logo-dark.png" alt="Sakura Cinema" class="brand-logo-img">
+        </div>
+        <div class="logo-text">
+          <span class="logo-title">Sakura Cinema</span>
+          <span class="logo-subtitle">桜シネマ・ブラウザ</span>
+        </div>
+      </a>
+
+      <!-- Omnibox Multi-Search -->
+      <div class="search-container">
+        <form id="searchForm" class="search-box">
+          <select id="searchEngine" class="search-engine-select" title="Выбор источника поиска">
+            <option value="hdrezka">🌸 HDrezka</option>
+            <option value="animego">🔥 AnimeGo</option>
+            <option value="kinopoisk">🎬 Кинопоиск</option>
+            <option value="youtube">📺 YouTube</option>
+            <option value="web">🌐 Веб / URL</option>
+          </select>
+          <input 
+            type="text" 
+            id="searchInput" 
+            class="search-input" 
+            placeholder="Поиск фильмов, аниме или введите адрес сайта... (Клавиша /)" 
+            autocomplete="off" 
+            spellcheck="false"
+          >
+          <button type="submit" class="search-btn" title="Искать">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+        </form>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <!-- Quick HDrezka Mirrors Status Pill -->
+        <button class="mirror-quick-btn" id="headerMirrorBtn" title="Нажмите для управления зеркалами HDrezka">
+          <span class="status-dot"></span>
+          <span>HDrezka:</span>
+          <span class="mirror-name-text">rezka.si</span>
+        </button>
+
+        <!-- Cinema Mode Button -->
+        <button class="icon-btn tooltip-wrap" id="btnCinemaMode" data-tooltip="Режим кинотеатра (Клавиша C)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+            <line x1="7" y1="2" x2="7" y2="22"></line>
+            <line x1="17" y1="2" x2="17" y2="22"></line>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <line x1="2" y1="7" x2="7" y2="7"></line>
+            <line x1="2" y1="17" x2="7" y2="17"></line>
+            <line x1="17" y1="17" x2="22" y2="17"></line>
+            <line x1="17" y1="7" x2="22" y2="7"></line>
+          </svg>
+        </button>
+
+        <!-- TV Mode Button -->
+        <button class="icon-btn tooltip-wrap" id="btnTvMode" data-tooltip="ТВ-режим (Для пульта)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+            <polyline points="17 2 12 7 7 2"></polyline>
+          </svg>
+        </button>
+
+        <!-- Background & Themes Modal -->
+        <button class="icon-btn tooltip-wrap" id="btnThemeModal" data-tooltip="Смена фона и APNG">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+          </svg>
+        </button>
+
+        <!-- Settings Modal -->
+        <button class="icon-btn tooltip-wrap" id="btnSettingsModal" data-tooltip="Настройки & Блокировщик">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- "Продолжить просмотр" (Continue Watching History) -->
+    <section class="history-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>🍿 Продолжить просмотр</span>
+          <span class="badge-count" id="historyCountBadge">4</span>
+        </h2>
+      </div>
+      <div class="history-scroll-container" id="historyContainer">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </section>
+
+    <!-- Categories & Filter Pills -->
+    <div class="category-filter-wrap">
+      <div class="category-pills">
+        <button class="cat-pill active" data-cat="all">🌸 Все сайты</button>
+        <button class="cat-pill" data-cat="favorites">⭐ Избранное</button>
+        <button class="cat-pill" data-cat="anime">⛩️ Аниме-онлайн</button>
+        <button class="cat-pill" data-cat="cinema">🎬 Фильмы & Сериалы</button>
+        <button class="cat-pill" data-cat="streaming">📺 Стриминг & Видео</button>
+      </div>
+
+      <button class="add-site-btn" id="btnOpenAddSite">
+        <span>+ Добавить сайт</span>
+      </button>
+    </div>
+
+    <!-- Main Sites Poster Grid -->
+    <main class="sites-grid" id="sitesGrid">
+      <!-- Site cards generated dynamically by app.js -->
+    </main>
+
+  </div>
+
+  <!-- Anime Mascot Companion (Сакура-тян 🌸) -->
+  <aside class="mascot-wrapper" id="mascotContainer" aria-label="Талисман Сакура-тян">
+    <div class="mascot-speech-bubble hidden" id="mascotSpeech">
+      <div id="mascotSpeechText">Привет, семпай! Что посмотрим сегодня? 🌸</div>
+    </div>
+    <div class="mascot-avatar-container" id="mascotAvatar" title="Нажми на меня!">
+      <img src="assets/mascot-dark.png" alt="Сакура-тян" class="mascot-dark-img" width="95" height="95">
+    </div>
+  </aside>
+
+  <!-- ========================================================================
+       MODAL: HDrezka Mirrors Manager
+       ======================================================================== -->
+  <div class="modal-backdrop" id="mirrorsModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>🌸 Умные зеркала HDrezka</span>
+        </h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">
+          Домены HDrezka часто блокируются или меняются. Приложение автоматически проверяет доступность, пинг и переключает на самое быстрое зеркало без обновления приложения.
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn-primary" id="btnAutoSelectFastest">🚀 Самое быстрое</button>
+          <button class="btn-secondary" id="btnTestAllMirrors">⚡ Проверить все</button>
+          <button class="btn-secondary" id="btnSyncGitHubMirrors">🔄 Обновить с GitHub</button>
+        </div>
+
+        <div style="font-weight: 700; font-size: 14px; margin-top: 8px;">Список зеркал:</div>
+        <div id="modalMirrorsList" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Mirrors items generated dynamically -->
+        </div>
+
+        <!-- Add Custom Mirror Input -->
+        <form id="formAddMirror" style="display: flex; gap: 10px; margin-top: 10px;">
+          <input 
+            type="text" 
+            id="inputMirrorUrl" 
+            placeholder="Новое зеркало (напр. rezka-stream.co)" 
+            style="flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.4); color: #fff; font-size: 13px;" 
+            required
+          >
+          <input 
+            type="text" 
+            id="inputMirrorLabel" 
+            placeholder="Название (опционально)" 
+            style="width: 140px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.4); color: #fff; font-size: 13px;"
+          >
+          <button type="submit" class="btn-secondary">+ Добавить</button>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <span style="font-size: 12px; color: var(--text-dim);">Источник JSON: GitHub Releases / CDN</span>
+        <button class="btn-secondary modal-close-trigger">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Backgrounds & Themes Selector
+       ======================================================================== -->
+  <div class="modal-backdrop" id="themeModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>🎨 Оформление & Анимированный фон</span>
+        </h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-weight: 700; font-size: 14px;">Тёмные кинематографичные темы:</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px;">
+          <!-- 1. Dream Chaser 4K Video Wallpaper -->
+          <div class="bg-preset-card" data-preset="dream-chaser" style="padding: 16px; border-radius: 12px; background: linear-gradient(135deg, #050408, #181226); border: 1.5px solid var(--sakura-pink); cursor: pointer; text-align: center; box-shadow: 0 0 16px rgba(255,51,102,0.3);">
+            <div style="font-size: 26px;">🎬</div>
+            <div style="font-weight: 700; font-size: 13.5px; margin-top: 6px; color: #fff;">Dream Chaser</div>
+            <div style="font-size: 11px; color: var(--sakura-soft);">4K Видео-обои</div>
+          </div>
+          <!-- 2. Cyberpunk Dark Rain -->
+          <div class="bg-preset-card" data-preset="cyberpunk-dark" style="padding: 16px; border-radius: 12px; background: linear-gradient(135deg, #05040d, #25103a); border: 1px solid rgba(168,85,247,0.4); cursor: pointer; text-align: center;">
+            <div style="font-size: 26px;">🌧️</div>
+            <div style="font-weight: 700; font-size: 13.5px; margin-top: 6px; color: #fff;">Неоновый Дождь</div>
+            <div style="font-size: 11px; color: var(--text-dim);">Figma Киберпанк</div>
+          </div>
+          <!-- 3. Midnight Moon & Torii -->
+          <div class="bg-preset-card" data-preset="midnight-sakura" style="padding: 16px; border-radius: 12px; background: linear-gradient(135deg, #070514, #360a2b); border: 1px solid rgba(255,51,102,0.4); cursor: pointer; text-align: center;">
+            <div style="font-size: 26px;">⛩️</div>
+            <div style="font-weight: 700; font-size: 13.5px; margin-top: 6px; color: #fff;">Лунная Сакура</div>
+            <div style="font-size: 11px; color: var(--text-dim);">Figma Полнолуние</div>
+          </div>
+          <!-- 4. Sakura Sunset Classic -->
+          <div class="bg-preset-card" data-preset="sakura-sunset" style="padding: 16px; border-radius: 12px; background: linear-gradient(135deg, #0a0614, #26091f); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; text-align: center;">
+            <div style="font-size: 26px;">🌸</div>
+            <div style="font-weight: 700; font-size: 13.5px; margin-top: 6px; color: #fff;">Тёмный Закат</div>
+            <div style="font-size: 11px; color: var(--text-dim);">Вечерний сад</div>
+          </div>
+        </div>
+
+        <div style="font-weight: 700; font-size: 14px; margin-top: 10px;">Эффект частиц поверх фона:</div>
+        <select id="particleModeSelect" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-glass); color: #fff; font-size: 13px;">
+          <option value="sakura">🌸 Падающие лепестки сакуры (с ветром)</option>
+          <option value="rain">🌧️ Киберпанк-дождь (Неоновые капли)</option>
+          <option value="fireflies">✨ Летние светлячки (Мягкое свечение)</option>
+          <option value="off">🚫 Выключить частицы</option>
+        </select>
+
+        <div style="font-weight: 700; font-size: 14px; margin-top: 10px;">Загрузить свой фон (APNG, GIF, WebM или картинку):</div>
+        <input 
+          type="file" 
+          id="bgCustomFileInput" 
+          accept="image/png, image/apng, image/gif, image/jpeg, image/webp" 
+          style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--border-glass); color: #fff; font-size: 13px;"
+        >
+        <span style="font-size: 11.5px; color: var(--text-dim);">Файл сохраняется локально в памяти вашего браузера.</span>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary modal-close-trigger">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Settings & Sync
+       ======================================================================== -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>⚙️ Настройки & Синхронизация</span>
+        </h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(25, 18, 44, 0.6); border-radius: 10px;">
+          <div>
+            <div style="font-weight: 700; font-size: 14px;">🛡️ Встроенный блокировщик рекламы</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Блокирует всплывающие окна, баннеры поверх плеера и трекеры</div>
+          </div>
+          <input type="checkbox" id="settingAdblockChk" checked style="width: 20px; height: 20px; accent-color: var(--sakura-pink); cursor: pointer;">
+        </div>
+
+        <div style="font-weight: 700; font-size: 14px; margin-top: 10px;">Синхронизация между ПК и Телефоном (Экспорт/Импорт):</div>
+        <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.45;">
+          Вы можете выгрузить список избранного, историю просмотров и настроенные зеркала в JSON-файл и открыть его на телефоне или ТВ.
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-primary" id="btnExportBackup">💾 Экспорт профиля (JSON)</button>
+          <button class="btn-secondary" id="btnImportBackup">📥 Импорт профиля</button>
+          <input type="file" id="importBackupFileInput" accept=".json" style="display: none;">
+        </div>
+
+        <div style="padding: 12px 16px; background: rgba(255, 117, 151, 0.08); border: 1px solid rgba(255, 117, 151, 0.25); border-radius: 10px; font-size: 12px; color: var(--sakura-soft);">
+          <b>Архитектура мультиплатформенности:</b><br>
+          Код готов к сборке через <b>Tauri 2</b> (Windows / Linux / Android APK) или <b>Capacitor</b>.
+          Для Android APK в WebView активирован обработчик <code>onShowCustomView</code> для разворачивания плеера во весь экран.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary modal-close-trigger">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Add Custom Site
+       ======================================================================== -->
+  <div class="modal-backdrop" id="addSiteModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>✨ Добавить новый сайт</span>
+        </h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <form id="formAddSite">
+        <div class="modal-body">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 700; color: var(--sakura-soft);">Название сайта:</label>
+            <input type="text" id="newSiteTitle" placeholder="Например: AnimeJoy или YummyAnime" required style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.4); color: #fff; font-size: 13px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 700; color: var(--sakura-soft);">URL адрес:</label>
+            <input type="text" id="newSiteUrl" placeholder="https://..." required style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.4); color: #fff; font-size: 13px;">
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 700; color: var(--sakura-soft);">Категория:</label>
+            <select id="newSiteCategory" style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-glass); background: #19122c; color: #fff; font-size: 13px;">
+              <option value="anime">⛩️ Аниме-онлайн</option>
+              <option value="cinema">🎬 Фильмы и Сериалы</option>
+              <option value="streaming">📺 Стриминг & Видео</option>
+            </select>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 12px; font-weight: 700; color: var(--sakura-soft);">Краткое описание:</label>
+            <textarea id="newSiteDesc" placeholder="Любимый плеер, без рекламы..." rows="2" style="padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(0,0,0,0.4); color: #fff; font-size: 13px; resize: none;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary modal-close-trigger">Отмена</button>
+          <button type="submit" class="btn-primary">Добавить сайт 🌸</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: In-App Cinema Web Frame / Embedded Viewer
+       ======================================================================== -->
+  <div class="modal-backdrop" id="inAppViewerModal" style="padding: 10px;">
+    <div class="modal-window" style="max-width: 96vw; height: 94vh; max-height: 94vh;">
+      <div class="modal-header" style="padding: 10px 18px; background: #0c0916;">
+        <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
+          <img src="assets/logo-dark.png" alt="Sakura Cinema" style="width:32px;height:32px;object-fit:contain;">
+          <div style="display: flex; flex-direction: column; overflow: hidden;">
+            <span id="viewerSiteTitle" style="font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">HDrezka</span>
+            <span id="viewerUrlDisplay" style="font-size: 11px; color: var(--sakura-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">https://rezka.si</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button id="viewerBackBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" title="Назад">← Назад</button>
+          <button id="viewerReloadBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" title="Обновить">↻</button>
+          <!-- Adblock badge indicator -->
+          <div style="font-size: 11px; font-weight: 700; background: rgba(6, 214, 160, 0.15); color: #06d6a0; border: 1px solid rgba(6, 214, 160, 0.3); padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px;">
+            🛡️ Щит Adblock активен
+          </div>
+          <!-- Direct Tab Button -->
+          <button id="viewerOpenDirectBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" title="Открыть во внешней вкладке">
+            ↗ В новой вкладке
+          </button>
+          <button class="modal-close-btn">&times;</button>
+        </div>
+      </div>
+
+      <div style="flex: 1; position: relative; background: #000; overflow: hidden;">
+        <div id="viewerLoading" style="position:absolute; inset:0; z-index:2; display:none; align-items:center; justify-content:center; background:rgba(5,4,12,.92); color:#ff6699; font-weight:700;">
+          <img src="assets/logo-dark.png" alt="Sakura Cinema" style="width:64px;height:64px;object-fit:contain;margin-right:12px;">
+          <span>Загрузка плеера...</span>
+        </div>
+        <iframe 
+          id="inAppIframe" 
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-fullscreen"
+          allow="fullscreen; picture-in-picture; autoplay" 
+          style="width: 100%; height: 100%; border: none;"
+        ></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/storage.js"></script>
+  <script src="js/sakura-engine.js"></script>
+  <script src="js/mirrors.js"></script>
+  <script src="js/mascot.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
