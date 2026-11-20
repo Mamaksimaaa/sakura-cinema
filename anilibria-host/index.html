@@ -29,7 +29,7 @@
 
     <div class="ani-header-left">
       <!-- Back to Sakura Cinema -->
-      <a class="back-btn" href="javascript:void(0)" onclick="window.history.back()" title="Назад в Sakura Cinema">
+      <a class="back-btn" href="index.html" title="Назад в Sakura Cinema">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
@@ -37,7 +37,7 @@
       </a>
 
       <!-- Brand -->
-      <a class="ani-brand" href="index.html">
+      <a class="ani-brand" href="anilibria.html">
         <div class="ani-brand-icon">
           <img src="assets/logo-dark.png" alt="Sakura Cinema" class="ani-brand-logo">
         </div>
@@ -291,10 +291,16 @@
       </div>
     </div>
 
-    <!-- Player body: info panel + episodes -->
+    <!-- Player body: видео (левая) + инфо+серии (правая) -->
     <div class="player-body">
 
-      <!-- Left: Anime info -->
+      <!-- Left: Video -->
+      <div class="player-video-section" id="playerVideoSection"><!-- see above --></div>
+
+      <!-- Right panel: info + episodes -->
+      <div class="player-right-panel">
+
+      <!-- Anime info -->
       <div class="player-info-panel">
 
         <div class="detail-poster-wrap">
@@ -339,6 +345,7 @@
 
       </div>
 
+      </div><!-- /.player-right-panel -->
     </div><!-- /.player-body -->
 
   </div><!-- /.player-modal -->
