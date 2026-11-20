@@ -1,0 +1,70 @@
+{
+  "updatedAt": "2026-11-20T21:00:00Z",
+  "remoteSourceUrl": "https://raw.githubusercontent.com/sakura-browser/mirrors/main/hdrezka.json",
+  "activeMirror": "https://rezka.si",
+  "mirrors": [
+    {
+      "id": "rezka-si",
+      "url": "https://rezka.si",
+      "label": "rezka.si (Основное)",
+      "region": "Direct",
+      "isOfficial": true,
+      "status": "online",
+      "ping": 38
+    },
+    {
+      "id": "rezka-ag",
+      "url": "https://rezka.ag",
+      "label": "rezka.ag (Основное)",
+      "region": "Global / CDN",
+      "isOfficial": true,
+      "status": "online",
+      "ping": 42
+    },
+    {
+      "id": "hdrezka-me",
+      "url": "https://hdrezka.me",
+      "label": "hdrezka.me (Зеркало 1)",
+      "region": "EU / Cloudflare",
+      "isOfficial": true,
+      "status": "online",
+      "ping": 58
+    },
+    {
+      "id": "hdrezka-app",
+      "url": "https://hdrezka.app",
+      "label": "hdrezka.app (App Mirror)",
+      "region": "Direct Fast",
+      "isOfficial": true,
+      "status": "online",
+      "ping": 64
+    },
+    {
+      "id": "rezka-ua",
+      "url": "https://rezka-ua.org",
+      "label": "rezka-ua.org (Альтернативное)",
+      "region": "East EU",
+      "isOfficial": true,
+      "status": "online",
+      "ping": 78
+    },
+    {
+      "id": "hdrezka-club",
+      "url": "https://hdrezka-club.com",
+      "label": "hdrezka-club.com (Резерв)",
+      "region": "Global",
+      "isOfficial": false,
+      "status": "standby",
+      "ping": 95
+    },
+    {
+      "id": "hdrezka-ag",
+      "url": "https://hdrezka.ag",
+      "label": "hdrezka.ag (Запасное зеркало)",
+      "region": "Global CDN",
+      "isOfficial": true,
+      "status": "online",
+      "ping": 81
+    }
+  ]
+}
