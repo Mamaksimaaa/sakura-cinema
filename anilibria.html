@@ -207,151 +207,90 @@
 </div><!-- /#app -->
 
 
-<!-- ══════════════════════════════════════════
-     PLAYER MODAL
-════════════════════════════════════════════ -->
+<!-- PLAYER MODAL -->
 <div class="player-modal-backdrop" id="playerBackdrop">
   <div class="player-modal">
 
-    <!-- Modal header -->
+    <!-- Шапка -->
     <div class="player-modal-header">
       <button class="player-close-btn" id="playerCloseBtn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         Закрыть
       </button>
       <div class="player-modal-title" id="playerModalTitle">Просмотр</div>
-    </div>
-
-    <!-- Video section -->
-    <div class="player-video-section">
-      <div class="player-video-wrap" id="playerVideoWrap">
-        <video
-          id="animeVideoPlayer"
-          playsinline
-          crossorigin="anonymous"
-        ></video>
-        <div class="custom-player-topbar">
-          <div class="custom-player-now" id="customPlayerNow">Просмотр серии</div>
-          <button class="custom-player-btn" id="customCloseBtn" type="button" aria-label="Закрыть плеер">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div class="custom-player-controls" id="customPlayerControls">
-          <input class="custom-player-progress" id="customPlayerProgress" type="range" min="0" max="1000" value="0" aria-label="Позиция воспроизведения">
-          <div class="custom-player-row">
-            <button class="custom-player-btn" id="customPlayBtn" type="button" aria-label="Воспроизвести">
-              <svg class="play-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-            </button>
-            <button class="custom-player-btn" id="customBackBtn" type="button" aria-label="Назад на 10 секунд">−10</button>
-            <button class="custom-player-btn" id="customForwardBtn" type="button" aria-label="Вперёд на 10 секунд">+10</button>
-            <button class="custom-player-btn" id="customMuteBtn" type="button" aria-label="Выключить звук">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
-            </button>
-            <input class="custom-player-volume" id="customPlayerVolume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость">
-            <span class="custom-player-time" id="customPlayerTime">0:00 / 0:00</span>
-            <button class="custom-player-speed" id="customPlayerSpeed" type="button" aria-label="Скорость">1x</button>
-            <button class="custom-player-next" id="customNextBtn" type="button">Следующая серия</button>
-            <div class="custom-quality">
-              <button class="custom-quality-btn" id="customQualityBtn" type="button" aria-haspopup="menu" aria-expanded="false">
-                <span id="customQualityText">720p</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div class="custom-quality-menu" id="customQualityMenu" role="menu">
-                <button type="button" role="menuitem" data-quality="480">480p</button>
-                <button type="button" role="menuitem" data-quality="720">720p</button>
-                <button type="button" role="menuitem" data-quality="1080">1080p</button>
-              </div>
-            </div>
-            <button class="custom-player-btn custom-player-fit" id="customFitBtn" type="button" aria-label="Масштаб" title="Масштаб: вписать / на весь экран">
-              <svg id="fitIconContain" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-              <svg id="fitIconCover" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
-            </button>
-            <button class="custom-player-btn custom-player-fullscreen" id="customFullscreenBtn" type="button" aria-label="Полный экран">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
-            </button>
-          </div>
-        </div>
-        <!-- Spinner overlay -->
-        <div class="player-spinner" id="playerSpinner">
-          <div class="spinner-ring"></div>
-        </div>
+      <!-- Навигация по сериям -->
+      <div class="player-ep-nav">
+        <button class="ep-nav-btn" id="epPrevBtn" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Пред.
+        </button>
+        <span class="ep-counter" id="epCounter">— / —</span>
+        <button class="ep-nav-btn" id="epNextBtn">
+          След.
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
       </div>
-
-      <!-- Controls bar: quality + episode nav -->
-      <div class="player-controls-bar">
-        <div class="player-ep-nav">
-          <button class="ep-nav-btn" id="epPrevBtn" disabled>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Пред.
-          </button>
-          <span class="ep-counter" id="epCounter">— / —</span>
-          <button class="ep-nav-btn" id="epNextBtn">
-            След.
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-        </div>
+      <!-- Качество -->
+      <div class="player-quality-wrap">
+        <span class="quality-label">Качество:</span>
+        <button class="quality-btn active" data-quality="720" id="q720">720p</button>
+        <button class="quality-btn" data-quality="1080" id="q1080">1080p</button>
+        <button class="quality-btn" data-quality="480" id="q480">480p</button>
       </div>
     </div>
 
-    <!-- Player body: видео (левая) + инфо+серии (правая) -->
+    <!-- Тело: видео + правая панель -->
     <div class="player-body">
 
-      <!-- Left: Video -->
-      <div class="player-video-section" id="playerVideoSection"><!-- see above --></div>
+      <!-- Видео -->
+      <div class="player-video-section">
+        <video
+          id="animeVideoPlayer"
+          controls
+          playsinline
+          crossorigin="anonymous"
+          style="width:100%;height:100%;background:#000;display:block;"
+        ></video>
+        <!-- Спиннер -->
+        <div class="player-spinner" id="playerSpinner"><div class="spinner-ring"></div></div>
+      </div>
 
-      <!-- Right panel: info + episodes -->
+      <!-- Правая панель: инфо + серии -->
       <div class="player-right-panel">
 
-      <!-- Anime info -->
-      <div class="player-info-panel">
-
-        <div class="detail-poster-wrap">
-          <img class="detail-poster" id="detailPoster" src="" alt="" loading="lazy">
-        </div>
-
-        <div class="detail-title" id="detailTitle"></div>
-        <div class="detail-title-en" id="detailTitleEn"></div>
-
-        <div class="detail-meta-row" id="detailMeta"></div>
-
-        <div class="detail-genres" id="detailGenres"></div>
-
-        <div class="detail-desc-label">Описание</div>
-        <div class="detail-desc" id="detailDesc"></div>
-        <button class="detail-desc-toggle" id="detailDescToggle">Читать ещё</button>
-
-        <div class="detail-stats">
-          <div class="detail-stat">
-            <span class="detail-stat-val" id="statWatching">—</span>
-            <div class="detail-stat-lbl">Смотрят</div>
+        <div class="player-info-panel">
+          <div class="detail-poster-wrap">
+            <img class="detail-poster" id="detailPoster" src="" alt="" loading="lazy">
           </div>
-          <div class="detail-stat">
-            <span class="detail-stat-val" id="statFavs">—</span>
-            <div class="detail-stat-lbl">В избранном</div>
+          <div class="detail-title" id="detailTitle"></div>
+          <div class="detail-title-en" id="detailTitleEn"></div>
+          <div class="detail-meta-row" id="detailMeta"></div>
+          <div class="detail-genres" id="detailGenres"></div>
+          <div class="detail-desc-label">Описание</div>
+          <div class="detail-desc" id="detailDesc"></div>
+          <button class="detail-desc-toggle" id="detailDescToggle">Читать ещё</button>
+          <div class="detail-stats">
+            <div class="detail-stat">
+              <span class="detail-stat-val" id="statWatching">—</span>
+              <div class="detail-stat-lbl">Смотрят</div>
+            </div>
+            <div class="detail-stat">
+              <span class="detail-stat-val" id="statFavs">—</span>
+              <div class="detail-stat-lbl">В избранном</div>
+            </div>
           </div>
         </div>
 
-      </div>
-
-      <!-- Right: Episodes list -->
-      <div class="player-episodes-panel">
-
-        <div class="episodes-header">
-          <div class="episodes-title">📺 Серии</div>
-          <div class="episodes-count" id="episodesCount">...</div>
+        <div class="player-episodes-panel">
+          <div class="episodes-header">
+            <div class="episodes-title">📺 Серии</div>
+            <div class="episodes-count" id="episodesCount">...</div>
+          </div>
+          <div class="episodes-list" id="episodesList"></div>
         </div>
-
-        <div class="episodes-list" id="episodesList">
-          <!-- Dynamic episodes by JS -->
-        </div>
-
-      </div>
 
       </div><!-- /.player-right-panel -->
     </div><!-- /.player-body -->
-
   </div><!-- /.player-modal -->
 </div><!-- /.player-modal-backdrop -->
 
