@@ -10,6 +10,7 @@ const ANI = {
   API: 'https://anilibria.top/api/v1',
   IMG: 'https://anilibria.top',
   PAGE_SIZE: 24,
+  CONTINUE_WATCHING_KEY: 'sakura-anime-continue-watching-v1',
 
   // State
   state: {
@@ -17,7 +18,8 @@ const ANI = {
     page: 1,
     total: 0,
     loading: false,
-    mode: 'latest',      // 'latest' | 'ongoing' | 'genre' | 'search'
+    catalogRequestId: 0,
+    mode: 'latest',      // 'latest' | 'ongoing' | 'genre' | 'search' | 'continue'
     activeGenre: null,
     activeGenreId: null,
     searchQuery: '',
@@ -31,14 +33,16 @@ const ANI = {
     // Player
     currentRelease: null,
     currentEpIndex: 0,
-    currentQuality: '720',
+    currentQuality: '1080',
     hls: null,
+    playerRequestId: 0,
   },
 
   // ─── Init ────────────────────────────────────────────────────
   init() {
     this.bindHeaderUI();
     this.bindPlayerUI();
+    this.updateContinueWatchingCount();
     this.loadGenres();
     this.loadLatest(true);
     this.startParticles();
@@ -54,6 +58,120 @@ const ANI = {
     const res = await fetch(url.toString());
     if (!res.ok) throw new Error(`API ${res.status}: ${endpoint}`);
     return res.json();
+  },
+
+  queueSearchPreview(query) {
+    clearTimeout(this._searchPreviewTimer);
+    this._searchPreviewRequestId = (this._searchPreviewRequestId || 0) + 1;
+    const requestId = this._searchPreviewRequestId;
+    if (query.length < 2) {
+      this.hideSearchPreview();
+      return;
+    }
+
+    this.renderSearchPreviewMessage('Ищем аниме…');
+    this._searchPreviewTimer = setTimeout(() => this.loadSearchPreview(query, requestId), 250);
+  },
+
+  async loadSearchPreview(query, requestId) {
+    try {
+      const data = await this.apiFetch('/anime/catalog/releases', {
+        'f[search]': query,
+        limit: 6,
+        page: 1,
+      });
+      if (requestId !== this._searchPreviewRequestId) return;
+      const releases = Array.isArray(data) ? data : (data.data || data.items || []);
+      this.renderSearchPreview(releases);
+    } catch (error) {
+      if (requestId !== this._searchPreviewRequestId) return;
+      this.renderSearchPreviewMessage('Не удалось выполнить поиск. Попробуйте ещё раз.');
+      console.warn('Search preview failed:', error);
+    }
+  },
+
+  renderSearchPreviewMessage(message) {
+    const preview = document.getElementById('aniSearchPreview');
+    const input = document.getElementById('aniSearchInput');
+    if (!preview) return;
+    preview.replaceChildren();
+    const status = document.createElement('div');
+    status.className = 'ani-search-preview-state';
+    status.setAttribute('role', 'status');
+    status.textContent = message;
+    preview.appendChild(status);
+    preview.hidden = false;
+    input?.setAttribute('aria-expanded', 'true');
+  },
+
+  renderSearchPreview(releases) {
+    const preview = document.getElementById('aniSearchPreview');
+    const input = document.getElementById('aniSearchInput');
+    if (!preview) return;
+    preview.replaceChildren();
+    if (releases.length === 0) {
+      this.renderSearchPreviewMessage('Ничего не найдено');
+      return;
+    }
+
+    releases.forEach(release => {
+      const title = release.name?.main || 'Без названия';
+      const posterPath = release.poster?.optimized?.preview
+        || release.poster?.preview
+        || release.poster?.optimized?.src
+        || release.poster?.src;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'ani-search-preview-item';
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-label', `Открыть ${title}`);
+
+      if (posterPath) {
+        const poster = document.createElement('img');
+        poster.src = this.IMG + posterPath;
+        poster.alt = '';
+        poster.loading = 'lazy';
+        poster.onerror = () => poster.remove();
+        item.appendChild(poster);
+      }
+
+      const info = document.createElement('span');
+      info.className = 'ani-search-preview-info';
+      const mainTitle = document.createElement('span');
+      mainTitle.className = 'ani-search-preview-title';
+      mainTitle.textContent = title;
+      info.appendChild(mainTitle);
+
+      const details = [release.name?.english, release.year, release.type?.description]
+        .filter(Boolean)
+        .join(' · ');
+      if (details) {
+        const subtitle = document.createElement('span');
+        subtitle.className = 'ani-search-preview-details';
+        subtitle.textContent = details;
+        info.appendChild(subtitle);
+      }
+      item.appendChild(info);
+      item.addEventListener('click', () => {
+        this.hideSearchPreview();
+        this.openPlayer(release);
+      });
+      preview.appendChild(item);
+    });
+
+    preview.hidden = false;
+    input?.setAttribute('aria-expanded', 'true');
+  },
+
+  hideSearchPreview() {
+    clearTimeout(this._searchPreviewTimer);
+    this._searchPreviewRequestId = (this._searchPreviewRequestId || 0) + 1;
+    const preview = document.getElementById('aniSearchPreview');
+    if (preview) {
+      preview.replaceChildren();
+      preview.hidden = true;
+    }
+    document.getElementById('aniSearchInput')?.setAttribute('aria-expanded', 'false');
   },
 
   // ─── Genre loading ────────────────────────────────────────────
@@ -72,7 +190,6 @@ const ANI = {
   renderGenreFilterBar(genres) {
     const bar = document.getElementById('genreFilterBar');
     if (!bar) return;
-    const allPill = bar.querySelector('[data-all]');
     // Keep "Все" pill, add genres
     const existing = bar.querySelectorAll('[data-genre-id]');
     existing.forEach(el => el.remove());
@@ -86,6 +203,7 @@ const ANI = {
       btn.addEventListener('click', () => this.selectGenre(g.id, g.name, btn));
       bar.appendChild(btn);
     });
+    this.syncGenreSelection();
   },
 
   renderSidebarGenres(genres) {
@@ -103,26 +221,42 @@ const ANI = {
       btn.addEventListener('click', () => this.selectGenre(g.id, g.name, btn));
       container.appendChild(btn);
     });
+    this.syncGenreSelection();
   },
 
   selectGenre(id, name, el) {
     if (this.state.activeGenreId === id) {
-      // Deselect
-      this.state.activeGenreId = null;
-      this.state.activeGenre = null;
-      document.querySelectorAll('[data-genre-id]').forEach(b => b.classList.remove('active'));
+      this.syncGenreSelection(null);
+      document.querySelectorAll('.sidebar-nav-item').forEach(item => item.classList.remove('active'));
+      document.getElementById('navLatest')?.classList.add('active');
       this.switchMode('latest');
     } else {
       this.state.activeGenreId = id;
       this.state.activeGenre = name;
-      document.querySelectorAll('[data-genre-id]').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll(`[data-genre-id="${id}"]`).forEach(b => b.classList.add('active'));
+      this.syncGenreSelection(id);
+      document.querySelectorAll('.sidebar-nav-item').forEach(item => item.classList.remove('active'));
       this.switchMode('genre');
     }
   },
 
+  syncGenreSelection(activeId = this.state.activeGenreId) {
+    this.state.activeGenreId = activeId;
+    if (activeId == null) this.state.activeGenre = null;
+    document.querySelectorAll('.gf-pill[data-genre-id], .genre-pill-btn[data-genre-id]').forEach(button => {
+      button.classList.toggle('active', activeId != null && String(button.dataset.genreId) === String(activeId));
+    });
+    document.querySelectorAll('[data-all]').forEach(button => {
+      button.classList.toggle('active', activeId == null);
+    });
+  },
+
   // ─── Mode switching ───────────────────────────────────────────
   switchMode(mode) {
+    this.hideSearchPreview();
+    this.state.catalogRequestId++;
+    this.state.loading = false;
+    this._genreFallbackResults = null;
+    this.updateLoadMore(false);
     this.state.mode = mode;
     this.state.page = 1;
     this.state.releases = [];
@@ -132,6 +266,7 @@ const ANI = {
     else if (mode === 'ongoing') this.loadOngoing(true);
     else if (mode === 'genre') this.loadByGenre(true);
     else if (mode === 'search') this.loadSearch(true);
+    else if (mode === 'continue') this.renderContinueWatching();
   },
 
   updateSectionTitle() {
@@ -150,12 +285,127 @@ const ANI = {
     } else if (this.state.mode === 'search') {
       title.textContent = `🔍 "${this.state.searchQuery}"`;
       if (subtitle) subtitle.textContent = 'Результаты поиска';
+    } else if (this.state.mode === 'continue') {
+      title.textContent = '🍿 Досмотреть';
+      if (subtitle) subtitle.textContent = 'Продолжите просмотр с сохранённого места';
     }
+  },
+
+  readContinueWatching() {
+    try {
+      const saved = localStorage.getItem(this.CONTINUE_WATCHING_KEY);
+      if (!saved) return [];
+      const records = JSON.parse(saved);
+      if (!Array.isArray(records)) throw new TypeError('Список продолжения должен быть массивом.');
+      return records.filter(record =>
+        record?.release?.id != null
+        && Number.isFinite(Number(record.currentTime))
+        && Number.isFinite(Number(record.duration))
+        && Number(record.duration) > 0
+      ).sort((a, b) => Number(b.updatedAt) - Number(a.updatedAt));
+    } catch (error) {
+      this.reportContinueWatchingError(error);
+      return [];
+    }
+  },
+
+  writeContinueWatching(records) {
+    try {
+      localStorage.setItem(this.CONTINUE_WATCHING_KEY, JSON.stringify(records));
+      this._continueWatchingStorageWarningShown = false;
+      this.updateContinueWatchingCount(records.length);
+    } catch (error) {
+      this.reportContinueWatchingError(error);
+    }
+  },
+
+  reportContinueWatchingError(error) {
+    console.error('Could not access continue-watching storage:', error);
+    if (this._continueWatchingStorageWarningShown) return;
+    this._continueWatchingStorageWarningShown = true;
+    this.showToast('Не удалось сохранить список «Досмотреть».', 'error');
+  },
+
+  updateContinueWatchingCount(count = this.readContinueWatching().length) {
+    const badge = document.getElementById('continueWatchCount');
+    if (!badge) return;
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.classList.toggle('visible', count > 0);
+  },
+
+  renderContinueWatching() {
+    const records = this.readContinueWatching();
+    this.updateContinueWatchingCount(records.length);
+    this.updateLoadMore(false);
+    if (records.length === 0) {
+      this.showEmpty('Пока нечего досматривать', 'Начните смотреть серию — прогресс появится здесь.');
+      const icon = document.querySelector('#cardsGrid .state-icon');
+      if (icon) icon.textContent = '🍿';
+      this.state.releases = [];
+      return;
+    }
+
+    const releases = records.map(record => ({
+      ...record.release,
+      continueInfo: record,
+    }));
+    this.state.releases = releases;
+    this.renderCards(releases, true);
+  },
+
+  saveCurrentWatchProgress(video) {
+    const release = this.state.currentRelease;
+    const episodes = this._sortedEpisodes || release?.episodes || [];
+    const episode = episodes[this.state.currentEpIndex];
+    if (!video || !release || !episode) return;
+    this.saveContinueProgress(release, episode, video.currentTime, video.duration);
+  },
+
+  saveContinueProgress(release, episode, currentTime, duration) {
+    if (release?.id == null || !episode || !Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) return;
+
+    const episodeOrdinal = episode.ordinal ?? this.state.currentEpIndex + 1;
+    const sameEpisode = record =>
+      String(record.release?.id) === String(release.id)
+      && String(record.episodeOrdinal) === String(episodeOrdinal);
+    const records = this.readContinueWatching();
+
+    if (currentTime / duration >= 0.95) {
+      this.writeContinueWatching(records.filter(record => !sameEpisode(record)));
+      return;
+    }
+    if (currentTime < 5) return;
+
+    const savedRelease = {
+      id: release.id,
+      name: {
+        main: release.name?.main || '',
+        english: release.name?.english || '',
+      },
+      poster: release.poster || null,
+      type: release.type || null,
+      year: release.year || null,
+      episodes_total: release.episodes_total || null,
+      is_ongoing: Boolean(release.is_ongoing),
+      genres: (release.genres || []).map(genre => ({ id: genre.id, name: genre.name })),
+      shikimori: release.shikimori || null,
+      mal: release.mal || null,
+    };
+    const nextRecords = records.filter(record => !sameEpisode(record));
+    nextRecords.unshift({
+      release: savedRelease,
+      episodeOrdinal,
+      currentTime,
+      duration,
+      updatedAt: Date.now(),
+    });
+    this.writeContinueWatching(nextRecords.slice(0, 40));
   },
 
   // ─── Data loading ─────────────────────────────────────────────
   async loadLatest(reset = false) {
     if (this.state.loading) return;
+    const requestId = this.state.catalogRequestId;
     if (reset) { this.state.page = 1; this.state.releases = []; this.clearGrid(); }
     this.state.loading = true;
     this.showSkeletons();
@@ -164,6 +414,7 @@ const ANI = {
         limit: this.PAGE_SIZE,
         page: this.state.page,
       });
+      if (requestId !== this.state.catalogRequestId) return;
       const list = Array.isArray(data) ? data : (data.data || data.items || []);
       this.state.releases.push(...list);
       this.hideSkeletons();
@@ -173,8 +424,10 @@ const ANI = {
       this.state.page++;
       this.updateLoadMore(list.length >= this.PAGE_SIZE);
     } catch (e) {
+      if (requestId !== this.state.catalogRequestId) return;
       this.hideSkeletons();
       this.showError('Не удалось загрузить список аниме. Проверьте подключение.');
+      this.updateLoadMore(false);
       console.error(e);
     }
     this.state.loading = false;
@@ -182,24 +435,47 @@ const ANI = {
 
   async loadOngoing(reset = false) {
     if (this.state.loading) return;
-    if (reset) { this.state.releases = []; this.clearGrid(); }
+    const requestId = this.state.catalogRequestId;
+    if (reset) {
+      this._ongoingNextPage = 1;
+      this._ongoingHasMore = true;
+      this.state.releases = [];
+      this.clearGrid();
+    }
     this.state.loading = true;
     this.showSkeletons();
     try {
-      const data = await this.apiFetch('/anime/releases/latest', {
-        limit: 100,
-        page: 1,
-      });
-      const list = (Array.isArray(data) ? data : (data.data || data.items || []))
-        .filter(release => release.is_ongoing);
+      const list = [];
+      let pagesScanned = 0;
+      while (this._ongoingHasMore && list.length < this.PAGE_SIZE && pagesScanned < 10) {
+        const batchSize = Math.min(4, 10 - pagesScanned);
+        const pages = Array.from({ length: batchSize }, (_, index) => this._ongoingNextPage + index);
+        const responses = await Promise.all(pages.map(page =>
+          this.apiFetch('/anime/releases/latest', { limit: this.PAGE_SIZE, page })
+        ));
+        if (requestId !== this.state.catalogRequestId) return;
+        for (const data of responses) {
+          this._ongoingNextPage++;
+          pagesScanned++;
+          const pageItems = Array.isArray(data) ? data : (data.data || data.items || []);
+          list.push(...pageItems.filter(release => release.is_ongoing === true));
+          if (pageItems.length < this.PAGE_SIZE) {
+            this._ongoingHasMore = false;
+            break;
+          }
+        }
+      }
+      if (list.length === 0) this._ongoingHasMore = false;
       this.state.releases.push(...list);
       this.hideSkeletons();
-      if (list.length === 0) this.showEmpty('Онгоингов пока нет', 'Попробуйте обновить список позже');
-      else this.renderCards(list, reset);
-      this.updateLoadMore(false);
+      if (list.length === 0 && reset) this.showEmpty('Онгоингов пока нет', 'Попробуйте обновить список позже');
+      else if (list.length > 0) this.renderCards(list, reset);
+      this.updateLoadMore(this._ongoingHasMore);
     } catch (e) {
+      if (requestId !== this.state.catalogRequestId) return;
       this.hideSkeletons();
       this.showError('Не удалось загрузить онгоинги. Проверьте подключение.');
+      this.updateLoadMore(false);
       console.error(e);
     }
     this.state.loading = false;
@@ -207,7 +483,13 @@ const ANI = {
 
   async loadByGenre(reset = false) {
     if (this.state.loading || !this.state.activeGenreId) return;
-    if (reset) { this.state.page = 1; this.state.releases = []; this.clearGrid(); }
+    const requestId = this.state.catalogRequestId;
+    if (reset) {
+      this.state.page = 1;
+      this.state.releases = [];
+      this._genreFallbackResults = null;
+      this.clearGrid();
+    }
     this.state.loading = true;
     this.showSkeletons();
     try {
@@ -216,22 +498,40 @@ const ANI = {
         limit: this.PAGE_SIZE,
         page: reset ? 1 : this.state.page,
       });
-      let list = Array.isArray(data) ? data : (data.data || data.items || []);
+      if (requestId !== this.state.catalogRequestId) return;
+      const pageItems = Array.isArray(data) ? data : (data.data || data.items || []);
+      let list;
+      let hasMore;
+      if (this._genreFallbackResults) {
+        const start = (this.state.page - 1) * this.PAGE_SIZE;
+        list = this._genreFallbackResults.slice(start, start + this.PAGE_SIZE);
+        hasMore = start + list.length < this._genreFallbackResults.length;
+      } else {
+        const matchesGenre = release =>
+          (release.genres || []).some(genre => Number(genre.id) === Number(this.state.activeGenreId));
+        list = pageItems.filter(matchesGenre);
+        hasMore = pageItems.length >= this.PAGE_SIZE;
+      }
       if (list.length === 0 && reset) {
         const releases = await this.loadCatalogPages(20);
-        list = releases.filter(release =>
+        if (requestId !== this.state.catalogRequestId) return;
+        this._genreFallbackResults = releases.filter(release =>
           (release.genres || []).some(genre => Number(genre.id) === Number(this.state.activeGenreId))
-        ).slice(0, this.PAGE_SIZE);
+        );
+        list = this._genreFallbackResults.slice(0, this.PAGE_SIZE);
+        hasMore = this._genreFallbackResults.length > list.length;
       }
       this.state.releases.push(...list);
       this.hideSkeletons();
-      if (list.length === 0) this.showEmpty('В этом жанре ничего не найдено', 'Попробуйте другой жанр');
-      else this.renderCards(list, reset);
+      if (list.length === 0 && reset) this.showEmpty('В этом жанре ничего не найдено', 'Попробуйте другой жанр');
+      else if (list.length > 0) this.renderCards(list, reset);
       this.state.page++;
-      this.updateLoadMore(list.length >= this.PAGE_SIZE);
+      this.updateLoadMore(hasMore);
     } catch (e) {
+      if (requestId !== this.state.catalogRequestId) return;
       this.hideSkeletons();
       this.showError('Не удалось загрузить аниме по жанру.');
+      this.updateLoadMore(false);
       console.error(e);
     }
     this.state.loading = false;
@@ -239,35 +539,36 @@ const ANI = {
 
   async loadSearch(reset = false) {
     if (this.state.loading || !this.state.searchQuery.trim()) return;
+    const requestId = this.state.catalogRequestId;
     if (reset) { this.state.page = 1; this.state.releases = []; this.clearGrid(); }
+    const page = reset ? 1 : this.state.page;
     this.state.loading = true;
     this.showSkeletons();
     try {
-      const data = await this.apiFetch('/anime/releases/latest', {
-        search: this.state.searchQuery,
+      const data = await this.apiFetch('/anime/catalog/releases', {
+        'f[search]': this.state.searchQuery.trim(),
         limit: this.PAGE_SIZE,
-        page: reset ? 1 : this.state.page,
+        page,
       });
-      let list = Array.isArray(data) ? data : (data.data || data.items || []);
-      if (list.length === 0 && reset) {
-        const releases = await this.loadCatalogPages(20);
-        const query = this.state.searchQuery.toLocaleLowerCase('ru');
-        list = releases.filter(release => {
-          const name = release.name || {};
-          return [name.main, name.english, name.alternative, release.alias]
-            .filter(Boolean)
-            .some(value => String(value).toLocaleLowerCase('ru').includes(query));
-        }).slice(0, this.PAGE_SIZE);
-      }
+      if (requestId !== this.state.catalogRequestId) return;
+      const list = Array.isArray(data) ? data : (data.data || data.items || []);
+      const pagination = data.meta?.pagination;
+      const currentPage = Number(pagination?.current_page);
+      const totalPages = Number(pagination?.total_pages);
+      const hasMore = Number.isFinite(currentPage) && Number.isFinite(totalPages)
+        ? currentPage < totalPages
+        : list.length >= this.PAGE_SIZE;
       this.state.releases.push(...list);
       this.hideSkeletons();
       if (list.length === 0 && reset) this.showEmpty('По запросу ничего не найдено', 'Попробуйте другой запрос');
-      else this.renderCards(list, reset);
-      this.state.page++;
-      this.updateLoadMore(list.length >= this.PAGE_SIZE);
+      else if (list.length > 0) this.renderCards(list, reset);
+      this.state.page = page + 1;
+      this.updateLoadMore(hasMore);
     } catch (e) {
+      if (requestId !== this.state.catalogRequestId) return;
       this.hideSkeletons();
       this.showError('Ошибка поиска. Попробуйте ещё раз.');
+      this.updateLoadMore(false);
       console.error(e);
     }
     this.state.loading = false;
@@ -324,7 +625,9 @@ const ANI = {
   createCard(r) {
     const name = r.name?.main || 'Без названия';
     const nameEn = r.name?.english || '';
-    const posterPath = r.poster?.optimized?.thumbnail || r.poster?.thumbnail || r.poster?.src || '';
+    const posterPath = r.poster?.src || r.poster?.optimized?.src
+      || r.poster?.optimized?.preview || r.poster?.preview
+      || r.poster?.optimized?.thumbnail || r.poster?.thumbnail || '';
     const posterUrl = posterPath ? (this.IMG + posterPath) : '';
     const rating = r.shikimori?.rating || r.mal?.rating || null;
     const genres = r.genres || [];
@@ -332,6 +635,10 @@ const ANI = {
     const type = r.type?.description || r.type?.value || '';
     const year = r.year || '';
     const epCount = r.episodes_total;
+    const continueInfo = r.continueInfo;
+    const continuePercent = continueInfo
+      ? Math.max(0, Math.min(100, Math.round((continueInfo.currentTime / continueInfo.duration) * 100)))
+      : 0;
 
     const card = document.createElement('div');
     card.className = 'anime-card';
@@ -350,7 +657,7 @@ const ANI = {
         <div class="card-hover-overlay">
           <button class="card-play-btn" aria-label="Смотреть">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-            Смотреть
+            ${continueInfo ? 'Продолжить' : 'Смотреть'}
           </button>
           <div class="card-genres-mini">
             ${genres.slice(0,2).map(g => `<span class="card-genre-mini">${this.esc(g.name)}</span>`).join('')}
@@ -372,19 +679,25 @@ const ANI = {
           <div class="card-genres-list">
             ${genres.slice(0,4).map(g => `<span class="card-genre-tag">${this.esc(g.name)}</span>`).join('')}
           </div>` : ''}
-        <div class="card-meta">
+        <div class="card-meta${continueInfo ? ' card-meta-continue' : ''}">
           ${year ? `<span>${year}</span>` : ''}
           ${year && type ? '<span class="card-meta-sep">·</span>' : ''}
           ${type ? `<span>${type}</span>` : ''}
           ${epCount ? `<span class="card-eps-badge">${epCount} эп.</span>` : ''}
         </div>
+        ${continueInfo ? `
+          <div class="card-continue-info">
+            <span>Серия ${this.esc(String(continueInfo.episodeOrdinal))} · ${this.fmtDuration(continueInfo.currentTime)} / ${this.fmtDuration(continueInfo.duration)}</span>
+            <div class="card-continue-progress"><span style="width:${continuePercent}%"></span></div>
+          </div>
+        ` : ''}
       </div>
     `;
 
-    card.addEventListener('click', () => this.openPlayer(r));
+    card.addEventListener('click', () => this.openPlayer(r, continueInfo));
     card.querySelector('.card-play-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.openPlayer(r);
+      this.openPlayer(r, continueInfo);
     });
 
     return card;
@@ -438,12 +751,28 @@ const ANI = {
   },
 
   // ─── Load more ────────────────────────────────────────────────
+  loadMore() {
+    const button = document.getElementById('loadMoreBtn');
+    if (!button || button.style.display === 'none' || button.disabled || this.state.loading) return;
+    button.disabled = true;
+    button.classList.add('loading');
+    if (this.state.mode === 'latest') this.loadLatest();
+    else if (this.state.mode === 'ongoing') this.loadOngoing();
+    else if (this.state.mode === 'genre') this.loadByGenre();
+    else if (this.state.mode === 'search') this.loadSearch();
+    else this.updateLoadMore(false);
+  },
+
   updateLoadMore(hasMore) {
     const btn = document.getElementById('loadMoreBtn');
     if (!btn) return;
     btn.style.display = hasMore ? 'flex' : 'none';
     btn.disabled = false;
     btn.classList.remove('loading');
+    if (hasMore && this._loadMoreObserver) {
+      this._loadMoreObserver.unobserve(btn);
+      this._loadMoreObserver.observe(btn);
+    }
   },
 
   // ─── Hero slider ──────────────────────────────────────────────
@@ -469,7 +798,9 @@ const ANI = {
     const genres = document.getElementById('heroGenres');
     const badges = document.getElementById('heroBadges');
 
-    const posterPath = r.poster?.optimized?.preview || r.poster?.src || '';
+    const posterPath = r.poster?.src || r.poster?.optimized?.src
+      || r.poster?.preview || r.poster?.optimized?.preview
+      || r.poster?.optimized?.thumbnail || '';
     const posterUrl = posterPath ? (this.IMG + posterPath) : '';
 
     if (bg && posterUrl) bg.style.backgroundImage = `url('${posterUrl}')`;
@@ -534,28 +865,42 @@ const ANI = {
 
     searchForm?.addEventListener('submit', e => {
       e.preventDefault();
+      this.hideSearchPreview();
       const q = searchInput?.value.trim();
       if (q) {
         this.state.searchQuery = q;
         // Clear genre selection
         this.state.activeGenreId = null;
         document.querySelectorAll('[data-genre-id]').forEach(b => b.classList.remove('active'));
-        document.querySelector('[data-all]')?.classList.add('active');
+        this.syncGenreSelection(null);
         this.switchMode('search');
       }
     });
 
     searchInput?.addEventListener('input', () => {
       if (searchClear) searchClear.classList.toggle('visible', searchInput.value.length > 0);
+      const query = searchInput.value.trim();
+      if (query.length >= 2) this.queueSearchPreview(query);
+      else this.hideSearchPreview();
       if (searchInput.value.length === 0 && this.state.mode === 'search') {
+        this.state.searchQuery = '';
         this.switchMode('latest');
       }
+    });
+    searchInput?.addEventListener('keydown', event => {
+      if (event.key === 'Escape') this.hideSearchPreview();
     });
 
     searchClear?.addEventListener('click', () => {
       if (searchInput) searchInput.value = '';
+      this.state.searchQuery = '';
+      this.hideSearchPreview();
       searchClear.classList.remove('visible');
       if (this.state.mode === 'search') this.switchMode('latest');
+    });
+    document.addEventListener('click', event => {
+      const searchWrap = document.querySelector('.ani-search-wrap');
+      if (searchWrap && !searchWrap.contains(event.target)) this.hideSearchPreview();
     });
 
     // View toggle
@@ -564,24 +909,25 @@ const ANI = {
 
     // "Все" pill
     document.querySelector('[data-all]')?.addEventListener('click', () => {
-      document.querySelectorAll('[data-genre-id]').forEach(b => b.classList.remove('active'));
-      document.querySelector('[data-all]')?.classList.add('active');
-      this.state.activeGenreId = null;
-      this.state.activeGenre = null;
+      this.syncGenreSelection(null);
       if (searchInput) searchInput.value = '';
+      this.state.searchQuery = '';
+      this.hideSearchPreview();
       if (searchClear) searchClear.classList.remove('visible');
+      document.querySelectorAll('.sidebar-nav-item').forEach(item => item.classList.remove('active'));
+      document.getElementById('navLatest')?.classList.add('active');
       this.switchMode('latest');
     });
 
     // Load more
-    document.getElementById('loadMoreBtn')?.addEventListener('click', () => {
-      const btn = document.getElementById('loadMoreBtn');
-      if (btn) { btn.disabled = true; btn.classList.add('loading'); }
-      if (this.state.mode === 'latest') this.loadLatest();
-      else if (this.state.mode === 'ongoing') this.loadOngoing();
-      else if (this.state.mode === 'genre') this.loadByGenre();
-      else if (this.state.mode === 'search') this.loadSearch();
-    });
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    loadMoreBtn?.addEventListener('click', () => this.loadMore());
+    if (loadMoreBtn && 'IntersectionObserver' in window) {
+      this._loadMoreObserver = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) this.loadMore();
+      }, { rootMargin: '500px 0px' });
+      this._loadMoreObserver.observe(loadMoreBtn);
+    }
 
     // Hero buttons
     document.getElementById('heroPlayBtn')?.addEventListener('click', () => {
@@ -607,17 +953,24 @@ const ANI = {
 
     // Sidebar nav
     document.getElementById('navLatest')?.addEventListener('click', () => {
-      this.state.activeGenreId = null;
+      this.syncGenreSelection(null);
       document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
       document.getElementById('navLatest')?.classList.add('active');
       this.switchMode('latest');
     });
 
     document.getElementById('navOngoing')?.addEventListener('click', () => {
-      this.state.activeGenreId = null;
+      this.syncGenreSelection(null);
       document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
       document.getElementById('navOngoing')?.classList.add('active');
       this.switchMode('ongoing');
+    });
+
+    document.getElementById('navContinue')?.addEventListener('click', () => {
+      this.syncGenreSelection(null);
+      document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
+      document.getElementById('navContinue')?.classList.add('active');
+      this.switchMode('continue');
     });
   },
 
@@ -628,6 +981,10 @@ const ANI = {
     grid.classList.toggle('list-view', mode === 'list');
     document.getElementById('viewGrid')?.classList.toggle('active', mode === 'grid');
     document.getElementById('viewList')?.classList.toggle('active', mode === 'list');
+    if (this.state.mode === 'continue') {
+      this.renderContinueWatching();
+      return;
+    }
     // Re-render existing cards
     const releases = this.state.releases.slice();
     this.state.releases = [];
@@ -662,6 +1019,7 @@ const ANI = {
     const volume = document.getElementById('customPlayerVolume');
     const time = document.getElementById('customPlayerTime');
     const fullscreenBtn = document.getElementById('customFullscreenBtn');
+    const headerFullscreenBtn = document.getElementById('playerHeaderFullscreenBtn');
     const speedBtn = document.getElementById('customPlayerSpeed');
     const closeBtn = document.getElementById('customCloseBtn');
     const backBtn = document.getElementById('customBackBtn');
@@ -672,24 +1030,123 @@ const ANI = {
     const qualityText = document.getElementById('customQualityText');
     const controls = document.getElementById('customPlayerControls');
     const topbar = document.querySelector('.custom-player-topbar');
+    const videoWrap = document.getElementById('playerVideoWrap');
+    const seekPreview = document.getElementById('customPlayerSeekPreview');
+    const previewCanvas = document.getElementById('customPlayerPreviewCanvas');
+    const previewImage = document.getElementById('customPlayerPreviewImage');
+    const previewTime = document.getElementById('customPlayerPreviewTime');
     let controlsTimer;
+    let previewHideTimer;
+    let isProgressScrubbing = false;
+    let lastWatchProgressSave = 0;
+
+    const saveWatchProgressIfDue = (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastWatchProgressSave < 10000) return;
+      this.saveCurrentWatchProgress(video);
+      lastWatchProgressSave = now;
+    };
+
+    const updateSeekPreview = (ratio, clientX) => {
+      if (!seekPreview || !progress || !video?.duration || !Number.isFinite(video.duration)) return;
+      const progressRect = progress.getBoundingClientRect();
+      const controlsRect = controls?.getBoundingClientRect();
+      const clampedRatio = Math.max(0, Math.min(1, ratio));
+      const previewWidth = seekPreview.offsetWidth || 160;
+      const pointerX = Number.isFinite(clientX)
+        ? clientX
+        : progressRect.left + clampedRatio * progressRect.width;
+      if (!isProgressScrubbing) previewCanvas?.classList.remove('visible');
+
+      seekPreview.style.left = `${Math.max(
+        previewWidth / 2,
+        Math.min((controlsRect?.width || progressRect.width) - previewWidth / 2, pointerX - (controlsRect?.left || progressRect.left))
+      )}px`;
+      if (previewTime) previewTime.textContent = this.fmtDuration(clampedRatio * video.duration);
+      seekPreview.classList.add('visible');
+
+      if (!previewCanvas?.classList.contains('visible')) {
+        const episodes = this._sortedEpisodes || this.state.currentRelease?.episodes || [];
+        const episode = episodes[this.state.currentEpIndex];
+        const previewPath = episode?.preview?.optimized?.src
+          || episode?.preview?.src
+          || episode?.preview?.optimized?.preview
+          || episode?.preview?.preview
+          || episode?.preview?.optimized?.thumbnail
+          || episode?.preview?.thumbnail;
+        if (previewImage) {
+          const previewUrl = previewPath ? this.IMG + previewPath : '';
+          if (previewUrl) {
+            if (previewImage.getAttribute('src') !== previewUrl) previewImage.src = previewUrl;
+          } else {
+            previewImage.removeAttribute('src');
+          }
+          previewImage.classList.toggle('visible', Boolean(previewPath));
+        }
+      }
+
+      clearTimeout(previewHideTimer);
+      if (!isProgressScrubbing) {
+        previewHideTimer = setTimeout(() => seekPreview.classList.remove('visible'), 900);
+      }
+    };
+
+    const updateSeekPreviewFromPointer = event => {
+      if (!progress) return;
+      const rect = progress.getBoundingClientRect();
+      if (!rect.width) return;
+      const ratio = (event.clientX - rect.left) / rect.width;
+      updateSeekPreview(ratio, event.clientX);
+    };
+
+    const drawSeekPreviewFrame = () => {
+      if (!seekPreview?.classList.contains('visible') || !previewCanvas || !video?.videoWidth || video.readyState < 2) return;
+      try {
+        const context = previewCanvas.getContext('2d');
+        if (!context) return;
+        const width = previewCanvas.width;
+        const height = previewCanvas.height;
+        const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
+        const frameWidth = video.videoWidth * scale;
+        const frameHeight = video.videoHeight * scale;
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(
+          video,
+          (width - frameWidth) / 2,
+          (height - frameHeight) / 2,
+          frameWidth,
+          frameHeight
+        );
+        previewCanvas.classList.add('visible');
+        previewImage?.classList.remove('visible');
+      } catch (error) {
+        console.warn('Seek frame preview is unavailable:', error);
+      }
+    };
 
     const showPlayerControls = () => {
       controls?.classList.remove('hidden');
       topbar?.classList.remove('hidden');
+      videoWrap?.classList.remove('cursor-hidden');
       clearTimeout(controlsTimer);
       if (!video?.paused) {
         controlsTimer = setTimeout(() => {
           controls?.classList.add('hidden');
           topbar?.classList.add('hidden');
+          videoWrap?.classList.add('cursor-hidden');
         }, 2600);
       }
     };
 
     playBtn?.addEventListener('click', () => {
       if (!video) return;
-      if (video.paused) video.play().catch(() => {});
-      else video.pause();
+      if (video.paused) this.requestPlay(video);
+      else {
+        saveWatchProgressIfDue(true);
+        video.pause();
+      }
     });
     video?.addEventListener('click', () => playBtn?.click());
     video?.addEventListener('play', () => {
@@ -697,15 +1154,53 @@ const ANI = {
     });
     video?.addEventListener('pause', () => {
       if (playBtn) playBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+      showPlayerControls();
     });
+    video?.addEventListener('waiting', () => document.getElementById('playerSpinner')?.classList.add('visible'));
+    video?.addEventListener('playing', () => document.getElementById('playerSpinner')?.classList.remove('visible'));
     video?.addEventListener('timeupdate', () => {
       if (!video.duration) return;
       if (progress) progress.value = String(Math.round((video.currentTime / video.duration) * 1000));
       if (time) time.textContent = `${this.fmtDuration(video.currentTime)} / ${this.fmtDuration(video.duration)}`;
+      saveWatchProgressIfDue();
     });
-    video?.addEventListener('ended', () => this.navigateEpisode(1));
+    video?.addEventListener('seeked', drawSeekPreviewFrame);
+    video?.addEventListener('ended', () => {
+      saveWatchProgressIfDue(true);
+      this.navigateEpisode(1);
+    });
     progress?.addEventListener('input', () => {
-      if (video?.duration) video.currentTime = (Number(progress.value) / 1000) * video.duration;
+      if (video?.duration) {
+        const ratio = Number(progress.value) / 1000;
+        video.currentTime = ratio * video.duration;
+        previewCanvas?.classList.remove('visible');
+        updateSeekPreview(ratio);
+      }
+    });
+    progress?.addEventListener('pointerenter', updateSeekPreviewFromPointer);
+    progress?.addEventListener('pointermove', updateSeekPreviewFromPointer);
+    progress?.addEventListener('pointerleave', () => {
+      if (!isProgressScrubbing) {
+        clearTimeout(previewHideTimer);
+        previewHideTimer = setTimeout(() => seekPreview?.classList.remove('visible'), 250);
+      }
+    });
+    progress?.addEventListener('pointerdown', event => {
+      isProgressScrubbing = true;
+      clearTimeout(previewHideTimer);
+      previewCanvas?.classList.remove('visible');
+      updateSeekPreviewFromPointer(event);
+    });
+    document.addEventListener('pointerup', () => {
+      if (!isProgressScrubbing) return;
+      isProgressScrubbing = false;
+      clearTimeout(previewHideTimer);
+      previewHideTimer = setTimeout(() => seekPreview?.classList.remove('visible'), 700);
+    });
+    progress?.addEventListener('change', () => {
+      if (isProgressScrubbing) return;
+      clearTimeout(previewHideTimer);
+      previewHideTimer = setTimeout(() => seekPreview?.classList.remove('visible'), 700);
     });
     volume?.addEventListener('input', () => {
       if (video) {
@@ -715,13 +1210,18 @@ const ANI = {
     });
     muteBtn?.addEventListener('click', () => {
       if (video) video.muted = !video.muted;
-      if (muteBtn) muteBtn.classList.toggle('muted', video?.muted);
+      if (muteBtn) {
+        muteBtn.classList.toggle('muted', video?.muted);
+        muteBtn.setAttribute('aria-label', video?.muted ? 'Включить звук' : 'Выключить звук');
+      }
     });
-    fullscreenBtn?.addEventListener('click', () => {
+    const toggleFullscreen = () => {
       const wrap = document.getElementById('playerVideoWrap');
       if (!document.fullscreenElement) wrap?.requestFullscreen?.();
       else document.exitFullscreen?.();
-    });
+    };
+    fullscreenBtn?.addEventListener('click', toggleFullscreen);
+    headerFullscreenBtn?.addEventListener('click', toggleFullscreen);
 
     // Кнопка масштаба: contain <-> cover
     const fitBtn = document.getElementById('customFitBtn');
@@ -768,8 +1268,8 @@ const ANI = {
         );
       });
     });
-    document.getElementById('playerVideoWrap')?.addEventListener('mousemove', showPlayerControls);
-    document.getElementById('playerVideoWrap')?.addEventListener('touchstart', showPlayerControls);
+    videoWrap?.addEventListener('mousemove', showPlayerControls);
+    videoWrap?.addEventListener('touchstart', showPlayerControls);
     video?.addEventListener('play', showPlayerControls);
 
     // Description expand
@@ -785,13 +1285,59 @@ const ANI = {
     // Keyboard
     document.addEventListener('keydown', e => {
       if (!document.getElementById('playerBackdrop')?.classList.contains('open')) return;
-      if (e.key === 'Escape') this.closePlayer();
-      if (e.key === 'ArrowRight') this.navigateEpisode(1);
-      if (e.key === 'ArrowLeft') this.navigateEpisode(-1);
+      if (e.key === 'Escape') {
+        this.closePlayer();
+        return;
+      }
+      if (e.target instanceof HTMLElement &&
+          (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName))) return;
+      if (e.key === ' ' || e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (video?.paused) this.requestPlay(video);
+        else {
+          saveWatchProgressIfDue(true);
+          video?.pause();
+        }
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (video && Number.isFinite(video.duration)) {
+          video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + (e.key === 'ArrowRight' ? 10 : -10)));
+        }
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (video) {
+          video.volume = Math.max(0, Math.min(1, video.volume + (e.key === 'ArrowUp' ? 0.05 : -0.05)));
+          video.muted = video.volume === 0;
+          if (volume) volume.value = String(video.volume);
+          muteBtn?.classList.toggle('muted', video.muted);
+          muteBtn?.setAttribute('aria-label', video.muted ? 'Включить звук' : 'Выключить звук');
+        }
+      } else if (e.key.toLowerCase() === 'm') {
+        if (video) video.muted = !video.muted;
+        muteBtn?.classList.toggle('muted', video?.muted);
+        muteBtn?.setAttribute('aria-label', video?.muted ? 'Включить звук' : 'Выключить звук');
+      } else if (e.key.toLowerCase() === 'f') {
+        const wrap = document.getElementById('playerVideoWrap');
+        if (!document.fullscreenElement) wrap?.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
     });
   },
 
-  async openPlayer(release) {
+  async openPlayer(release, resumeInfo = null) {
+    this.saveCurrentWatchProgress(document.getElementById('animeVideoPlayer'));
+    const requestId = ++this.state.playerRequestId;
+    this._sortedEpisodes = [];
+    if (this.state.hls) {
+      this.state.hls.destroy();
+      this.state.hls = null;
+    }
+    const video = document.getElementById('animeVideoPlayer');
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
     // Show modal immediately with available data
     const modal = document.getElementById('playerBackdrop');
     if (modal) modal.classList.add('open');
@@ -819,6 +1365,7 @@ const ANI = {
         }
       }
     }
+    if (requestId !== this.state.playerRequestId) return;
 
     this.state.currentRelease = fullRelease;
     this.state.currentEpIndex = 0;
@@ -835,16 +1382,28 @@ const ANI = {
     if (spinner) spinner.classList.remove('visible');
 
     // Auto-play first episode
-    const episodes = fullRelease.episodes || [];
+    const episodes = this._sortedEpisodes || fullRelease.episodes || [];
     if (episodes.length > 0) {
-      this.playEpisode(0);
+      const resumeIndex = resumeInfo
+        ? episodes.findIndex(episode => String(episode.ordinal) === String(resumeInfo.episodeOrdinal))
+        : 0;
+      if (resumeIndex < 0) {
+        this.showToast('Сохранённая серия недоступна. Открыта первая серия.', 'info');
+        this.playEpisode(0);
+      } else {
+        const resumeTime = resumeInfo ? Number(resumeInfo.currentTime) : 0;
+        this.playEpisode(resumeIndex, Number.isFinite(resumeTime) ? resumeTime : 0);
+      }
     } else {
-      // No HLS available
-      this.showPlayerMessage('У этого аниме пока нет доступных серий');
+      this.showPlayerMessage(release.latest_episode
+        ? 'Список серий пока недоступен. Попробуйте открыть аниме позже.'
+        : 'У этого аниме пока нет доступных серий');
     }
   },
 
   closePlayer() {
+    this.saveCurrentWatchProgress(document.getElementById('animeVideoPlayer'));
+    this.state.playerRequestId++;
     const modal = document.getElementById('playerBackdrop');
     if (modal) modal.classList.remove('open');
     document.body.style.overflow = '';
@@ -855,14 +1414,18 @@ const ANI = {
       this.state.hls = null;
     }
     const video = document.getElementById('animeVideoPlayer');
+    document.getElementById('playerVideoWrap')?.classList.remove('cursor-hidden');
     if (video) {
       video.pause();
-      video.src = '';
+      video.removeAttribute('src');
+      video.load();
     }
+    this._sortedEpisodes = [];
     const progress = document.getElementById('customPlayerProgress');
     const time = document.getElementById('customPlayerTime');
     if (progress) progress.value = '0';
     if (time) time.textContent = '0:00 / 0:00';
+    if (this.state.mode === 'continue') this.renderContinueWatching();
   },
 
   renderDetailPanel(r) {
@@ -953,7 +1516,9 @@ const ANI = {
       item.className = 'episode-item';
       item.dataset.epIdx = idx;
 
-      const thumbPath = ep.preview?.optimized?.thumbnail || ep.preview?.thumbnail || '';
+      const thumbPath = ep.preview?.src || ep.preview?.optimized?.src
+        || ep.preview?.preview || ep.preview?.optimized?.preview
+        || ep.preview?.optimized?.thumbnail || ep.preview?.thumbnail || '';
       const thumbUrl = thumbPath ? (this.IMG + thumbPath) : '';
       const dur = ep.duration ? this.fmtDuration(ep.duration) : '';
 
@@ -985,11 +1550,12 @@ const ANI = {
     this._sortedEpisodes = sorted;
   },
 
-  playEpisode(idx) {
+  playEpisode(idx, startTime = 0) {
     const episodes = this._sortedEpisodes || this.state.currentRelease?.episodes || [];
     const ep = episodes[idx];
     if (!ep) return;
 
+    this.saveCurrentWatchProgress(document.getElementById('animeVideoPlayer'));
     this.state.currentEpIndex = idx;
 
     // Highlight active episode
@@ -1010,9 +1576,27 @@ const ANI = {
     if (counter) counter.textContent = `${idx + 1} / ${episodes.length}`;
     const now = document.getElementById('customPlayerNow');
     if (now) now.textContent = `${this.state.currentRelease?.name?.main || 'Просмотр'} — Серия ${ep.ordinal || idx + 1}`;
+    const previewImage = document.getElementById('customPlayerPreviewImage');
+    const previewCanvas = document.getElementById('customPlayerPreviewCanvas');
+    const previewPath = ep.preview?.optimized?.src
+      || ep.preview?.src
+      || ep.preview?.optimized?.preview
+      || ep.preview?.preview
+      || ep.preview?.optimized?.thumbnail
+      || ep.preview?.thumbnail;
+    if (previewImage) {
+      const previewUrl = previewPath ? this.IMG + previewPath : '';
+      if (previewUrl) {
+        if (previewImage.getAttribute('src') !== previewUrl) previewImage.src = previewUrl;
+      } else {
+        previewImage.removeAttribute('src');
+      }
+      previewImage.classList.toggle('visible', Boolean(previewPath));
+    }
+    previewCanvas?.classList.remove('visible');
 
     // Load HLS
-    this.loadHLS(ep);
+    this.loadHLS(ep, startTime);
   },
 
   navigateEpisode(delta) {
@@ -1023,20 +1607,19 @@ const ANI = {
     }
   },
 
-  loadHLS(ep) {
+  loadHLS(ep, startTime = 0) {
     const video = document.getElementById('animeVideoPlayer');
     const spinner = document.getElementById('playerSpinner');
     if (!video) return;
 
-    // Determine URL based on quality
-    const quality = this.state.currentQuality;
-    const url = ep[`hls_${quality}`] || ep.hls_720 || ep.hls_1080 || ep.hls_480;
-
-    if (!url) {
-      this.showPlayerMessage('Видео для этой серии недоступно');
-      return;
-    }
-
+    const availableQualities = ['480', '720', '1080'].filter(q => ep[`hls_${q}`]);
+    const quality = availableQualities.includes(this.state.currentQuality)
+      ? this.state.currentQuality
+      : availableQualities.filter(q => Number(q) <= Number(this.state.currentQuality)).pop()
+        || availableQualities[availableQualities.length - 1];
+    this.state.currentQuality = quality || this.state.currentQuality;
+    this.updateQualityButtons(ep);
+    this.clearPlayerMessage();
     if (spinner) spinner.classList.add('visible');
 
     // Destroy previous HLS
@@ -1044,34 +1627,68 @@ const ANI = {
       this.state.hls.destroy();
       this.state.hls = null;
     }
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    const progress = document.getElementById('customPlayerProgress');
+    const time = document.getElementById('customPlayerTime');
+    if (progress) progress.value = '0';
+    if (time) time.textContent = '0:00 / 0:00';
+
+    const url = quality ? ep[`hls_${quality}`] : null;
+    if (!url) {
+      spinner?.classList.remove('visible');
+      this.showPlayerMessage('Видео для этой серии недоступно');
+      return;
+    }
 
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        backBufferLength: 90,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 128 * 1024 * 1024,
+        backBufferLength: 30,
       });
+      let recoveredMediaError = false;
       this.state.hls = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (this.state.hls !== hls) return;
         if (spinner) spinner.classList.remove('visible');
-        video.play().catch(() => {});
+        const startPlayback = () => {
+          if (this.state.hls !== hls) return;
+          if (startTime > 0 && Number.isFinite(video.duration) && video.duration > 0) {
+            video.currentTime = Math.min(startTime, video.duration);
+          }
+          this.requestPlay(video);
+        };
+        if (startTime > 0 && video.readyState < 1) {
+          video.addEventListener('loadedmetadata', startPlayback, { once: true });
+        } else {
+          startPlayback();
+        }
         this.updateQualityButtons(ep);
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          if (spinner) spinner.classList.remove('visible');
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            this.showToast('⚠️ Ошибка сети. Пробуем другое качество...', 'error');
-            // Try fallback quality
-            const fallback = quality === '1080' ? '720' : quality === '720' ? '480' : null;
-            if (fallback && ep[`hls_${fallback}`]) {
-              this.state.currentQuality = fallback;
-              this.updateQualityBtnsUI(fallback);
-              this.loadHLS(ep);
-            }
-          }
+        if (!data.fatal || this.state.hls !== hls) return;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMediaError) {
+          recoveredMediaError = true;
+          hls.recoverMediaError();
+          return;
+        }
+        spinner?.classList.remove('visible');
+        const fallback = ['1080', '720', '480'].find(q =>
+          Number(q) < Number(quality) && ep[`hls_${q}`]
+        );
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && fallback) {
+          this.showToast(`Не удалось загрузить ${quality}p. Переключаем на ${fallback}p.`, 'error');
+          this.state.currentQuality = fallback;
+          this.loadHLS(ep, startTime);
+        } else {
+          this.showPlayerMessage('Не удалось загрузить видео. Проверьте подключение и попробуйте ещё раз.');
         }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -1079,8 +1696,11 @@ const ANI = {
       video.src = url;
       video.addEventListener('loadedmetadata', () => {
         if (spinner) spinner.classList.remove('visible');
-        video.play().catch(() => {});
-      });
+        if (startTime > 0 && Number.isFinite(video.duration) && video.duration > 0) {
+          video.currentTime = Math.min(startTime, video.duration);
+        }
+        this.requestPlay(video);
+      }, { once: true });
     } else {
       if (spinner) spinner.classList.remove('visible');
       this.showPlayerMessage('Ваш браузер не поддерживает HLS воспроизведение');
@@ -1088,13 +1708,6 @@ const ANI = {
   },
 
   updateQualityButtons(ep) {
-    const q480 = document.getElementById('q480');
-    const q720 = document.getElementById('q720');
-    const q1080 = document.getElementById('q1080');
-    if (q480) q480.disabled = !ep.hls_480;
-    if (q720) q720.disabled = !ep.hls_720;
-    if (q1080) q1080.disabled = !ep.hls_1080;
-    this.updateQualityBtnsUI(this.state.currentQuality);
     document.getElementById('customQualityText')?.replaceChildren(
       document.createTextNode(`${this.state.currentQuality}p`)
     );
@@ -1104,6 +1717,14 @@ const ANI = {
         : ep.hls_1080;
       btn.disabled = !available;
       btn.classList.toggle('active', btn.dataset.quality === this.state.currentQuality);
+    });
+  },
+
+  requestPlay(video) {
+    video.play().catch(() => {
+      if (document.getElementById('playerBackdrop')?.classList.contains('open')) {
+        this.showToast('Нажмите ▶, чтобы начать воспроизведение.', 'info');
+      }
     });
   },
 
@@ -1141,10 +1762,15 @@ const ANI = {
     if (!msgEl) {
       msgEl = document.createElement('div');
       msgEl.className = 'player-message';
-      msgEl.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px;background:rgba(0,0,0,0.6);text-align:center;padding:20px;';
+      msgEl.setAttribute('role', 'alert');
+      msgEl.setAttribute('aria-live', 'assertive');
       wrap.appendChild(msgEl);
     }
     msgEl.textContent = msg;
+  },
+
+  clearPlayerMessage() {
+    document.querySelector('#playerVideoWrap .player-message')?.remove();
   },
 
   // ─── Particles (sakura petals) ───────────────────────────────
