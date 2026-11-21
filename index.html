@@ -174,7 +174,36 @@
               <span class="sidebar-nav-count" id="continueWatchCount"></span>
             </button>
           </li>
+          <li>
+            <button class="sidebar-nav-item" id="navRecommendations">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              Рекомендации
+            </button>
+          </li>
+          <li>
+            <button class="sidebar-nav-item" id="navWatching">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+              </svg>
+              Смотрят сейчас
+            </button>
+          </li>
         </ul>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Фильтр каталога</div>
+        <div class="catalog-filter">
+          <label for="yearFilter">Год выпуска</label>
+          <select id="yearFilter">
+            <option value="">Все годы</option>
+          </select>
+          <button type="button" id="applyCatalogFilters">Применить</button>
+          <button type="button" id="clearCatalogFilters" class="catalog-filter-clear">Сбросить</button>
+        </div>
       </div>
 
       <div class="sidebar-section">
@@ -356,6 +385,14 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- Similar anime -->
+      <div class="similar-panel" id="similarPanel">
+        <div class="similar-header">
+          <div class="episodes-title">✨ Похожие аниме</div>
+        </div>
+        <div class="similar-list" id="similarList"></div>
       </div>
 
       <!-- Right: Episodes list -->
