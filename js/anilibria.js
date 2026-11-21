@@ -19,9 +19,11 @@ const ANI = {
     total: 0,
     loading: false,
     catalogRequestId: 0,
-    mode: 'latest',      // 'latest' | 'ongoing' | 'genre' | 'search' | 'continue'
+    mode: 'latest',      // 'latest' | 'ongoing' | 'genre' | 'search' | 'continue' | 'recommendations' | 'watching'
     activeGenre: null,
     activeGenreId: null,
+    activeGenreIds: [],
+    activeYear: null,
     searchQuery: '',
     viewMode: 'grid',    // 'grid' | 'list'
     genres: [],
@@ -43,9 +45,22 @@ const ANI = {
     this.bindHeaderUI();
     this.bindPlayerUI();
     this.updateContinueWatchingCount();
+    this.initCatalogFilters();
     this.loadGenres();
     this.loadLatest(true);
     this.startParticles();
+  },
+
+  initCatalogFilters() {
+    const yearSelect = document.getElementById('yearFilter');
+    if (!yearSelect) return;
+    const currentYear = new Date().getFullYear();
+    for (let year = currentYear; year >= 1960; year--) {
+      const option = document.createElement('option');
+      option.value = String(year);
+      option.textContent = String(year);
+      yearSelect.appendChild(option);
+    }
   },
 
   // ─── API helpers ─────────────────────────────────────────────
@@ -225,28 +240,43 @@ const ANI = {
   },
 
   selectGenre(id, name, el) {
-    if (this.state.activeGenreId === id) {
-      this.syncGenreSelection(null);
-      document.querySelectorAll('.sidebar-nav-item').forEach(item => item.classList.remove('active'));
+    const numericId = Number(id);
+    const isSelected = this.state.activeGenreIds.includes(numericId);
+    this.state.activeGenreIds = isSelected
+      ? this.state.activeGenreIds.filter(genreId => genreId !== numericId)
+      : [...this.state.activeGenreIds, numericId];
+    this.state.activeGenreId = this.state.activeGenreIds[0] || null;
+    this.state.activeGenre = this.state.activeGenreIds.length
+      ? this.state.activeGenreIds
+          .map(genreId => this.state.genres.find(genre => Number(genre.id) === genreId)?.name)
+          .filter(Boolean)
+          .join(', ')
+      : null;
+    this.syncGenreSelection(this.state.activeGenreId);
+    document.querySelectorAll('.sidebar-nav-item').forEach(item => item.classList.remove('active'));
+    if (this.state.activeGenreIds.length > 0) {
+      this.switchMode('genre');
+    } else {
       document.getElementById('navLatest')?.classList.add('active');
       this.switchMode('latest');
-    } else {
-      this.state.activeGenreId = id;
-      this.state.activeGenre = name;
-      this.syncGenreSelection(id);
-      document.querySelectorAll('.sidebar-nav-item').forEach(item => item.classList.remove('active'));
-      this.switchMode('genre');
     }
   },
 
   syncGenreSelection(activeId = this.state.activeGenreId) {
-    this.state.activeGenreId = activeId;
-    if (activeId == null) this.state.activeGenre = null;
+    if (activeId == null) {
+      this.state.activeGenreIds = [];
+      this.state.activeGenreId = null;
+      this.state.activeGenre = null;
+    }
+    const selectedIds = this.state.activeGenreIds;
     document.querySelectorAll('.gf-pill[data-genre-id], .genre-pill-btn[data-genre-id]').forEach(button => {
-      button.classList.toggle('active', activeId != null && String(button.dataset.genreId) === String(activeId));
+      button.classList.toggle(
+        'active',
+        selectedIds.includes(Number(button.dataset.genreId))
+      );
     });
     document.querySelectorAll('[data-all]').forEach(button => {
-      button.classList.toggle('active', activeId == null);
+      button.classList.toggle('active', selectedIds.length === 0);
     });
   },
 
@@ -267,6 +297,8 @@ const ANI = {
     else if (mode === 'genre') this.loadByGenre(true);
     else if (mode === 'search') this.loadSearch(true);
     else if (mode === 'continue') this.renderContinueWatching();
+    else if (mode === 'recommendations') this.loadRecommendations(true);
+    else if (mode === 'watching') this.loadWatching(true);
   },
 
   updateSectionTitle() {
@@ -280,14 +312,24 @@ const ANI = {
       title.textContent = '⏰ Онгоинги';
       if (subtitle) subtitle.textContent = 'Аниме, выходящие сейчас';
     } else if (this.state.mode === 'genre') {
-      title.textContent = `🎭 ${this.state.activeGenre}`;
-      if (subtitle) subtitle.textContent = 'Аниме по жанру';
+      title.textContent = this.state.activeGenre
+        ? `🎭 ${this.state.activeGenre}`
+        : '🎬 Каталог';
+      if (subtitle) subtitle.textContent = this.state.activeYear
+        ? `Фильтр: ${this.state.activeYear}`
+        : 'Аниме по выбранным фильтрам';
     } else if (this.state.mode === 'search') {
       title.textContent = `🔍 "${this.state.searchQuery}"`;
       if (subtitle) subtitle.textContent = 'Результаты поиска';
     } else if (this.state.mode === 'continue') {
       title.textContent = '🍿 Досмотреть';
       if (subtitle) subtitle.textContent = 'Продолжите просмотр с сохранённого места';
+    } else if (this.state.mode === 'recommendations') {
+      title.textContent = '⭐ Рекомендации';
+      if (subtitle) subtitle.textContent = 'Популярное по рейтингу и избранному';
+    } else if (this.state.mode === 'watching') {
+      title.textContent = '▶ Смотрят сейчас';
+      if (subtitle) subtitle.textContent = 'Аниме с наибольшим количеством зрителей';
     }
   },
 
@@ -482,45 +524,40 @@ const ANI = {
   },
 
   async loadByGenre(reset = false) {
-    if (this.state.loading || !this.state.activeGenreId) return;
+    if (this.state.loading || (this.state.activeGenreIds.length === 0 && !this.state.activeYear)) return;
     const requestId = this.state.catalogRequestId;
     if (reset) {
       this.state.page = 1;
       this.state.releases = [];
-      this._genreFallbackResults = null;
       this.clearGrid();
     }
     this.state.loading = true;
     this.showSkeletons();
     try {
-      const data = await this.apiFetch('/anime/releases/latest', {
-        genres: [this.state.activeGenreId],
+      const params = {
         limit: this.PAGE_SIZE,
         page: reset ? 1 : this.state.page,
-      });
+      };
+      if (this.state.activeGenreIds.length) params['f[genres]'] = this.state.activeGenreIds.join(',');
+      if (this.state.activeYear) {
+        params['f[years][from_year]'] = this.state.activeYear;
+        params['f[years][to_year]'] = this.state.activeYear;
+      }
+      const data = await this.apiFetch('/anime/catalog/releases', params);
       if (requestId !== this.state.catalogRequestId) return;
       const pageItems = Array.isArray(data) ? data : (data.data || data.items || []);
-      let list;
-      let hasMore;
-      if (this._genreFallbackResults) {
-        const start = (this.state.page - 1) * this.PAGE_SIZE;
-        list = this._genreFallbackResults.slice(start, start + this.PAGE_SIZE);
-        hasMore = start + list.length < this._genreFallbackResults.length;
-      } else {
-        const matchesGenre = release =>
-          (release.genres || []).some(genre => Number(genre.id) === Number(this.state.activeGenreId));
-        list = pageItems.filter(matchesGenre);
-        hasMore = pageItems.length >= this.PAGE_SIZE;
-      }
-      if (list.length === 0 && reset) {
-        const releases = await this.loadCatalogPages(20);
-        if (requestId !== this.state.catalogRequestId) return;
-        this._genreFallbackResults = releases.filter(release =>
-          (release.genres || []).some(genre => Number(genre.id) === Number(this.state.activeGenreId))
-        );
-        list = this._genreFallbackResults.slice(0, this.PAGE_SIZE);
-        hasMore = this._genreFallbackResults.length > list.length;
-      }
+      const pagination = data.meta?.pagination;
+      const list = pageItems.filter(release =>
+        this.state.activeGenreIds.every(genreId =>
+          (release.genres || []).some(genre => Number(genre.id) === genreId)
+        )
+        && (!this.state.activeYear || Number(release.year) === Number(this.state.activeYear))
+      );
+      const currentPage = Number(pagination?.current_page);
+      const totalPages = Number(pagination?.total_pages);
+      const hasMore = Number.isFinite(currentPage) && Number.isFinite(totalPages)
+        ? currentPage < totalPages
+        : list.length >= this.PAGE_SIZE;
       this.state.releases.push(...list);
       this.hideSkeletons();
       if (list.length === 0 && reset) this.showEmpty('В этом жанре ничего не найдено', 'Попробуйте другой жанр');
@@ -568,6 +605,65 @@ const ANI = {
       if (requestId !== this.state.catalogRequestId) return;
       this.hideSkeletons();
       this.showError('Ошибка поиска. Попробуйте ещё раз.');
+      this.updateLoadMore(false);
+      console.error(e);
+    }
+    this.state.loading = false;
+  },
+
+  async loadRecommendations(reset = false) {
+    await this.loadCatalogRanking(reset, '-added_in_users_favorites');
+  },
+
+  async loadWatching(reset = false) {
+    await this.loadCatalogRanking(reset, '-added_in_watching_collection');
+  },
+
+  async loadCatalogRanking(reset = false, sortingPrimary, sortingFallback = null) {
+    if (this.state.loading) return;
+    const requestId = this.state.catalogRequestId;
+    if (reset) {
+      this.state.page = 1;
+      this.state.releases = [];
+      this._rankingResults = null;
+      this.clearGrid();
+    }
+    this.state.loading = true;
+    this.showSkeletons();
+    try {
+      if (!this._rankingResults) {
+        const releases = await this.loadCatalogPages(30);
+        if (requestId !== this.state.catalogRequestId) return;
+        if (sortingPrimary === '-added_in_watching_collection') {
+          this._rankingResults = [...releases].sort((a, b) =>
+            Number(b.added_in_watching_collection || 0) -
+            Number(a.added_in_watching_collection || 0)
+          );
+        } else {
+          this._rankingResults = [...releases].sort((a, b) => {
+            const ratingA = Number(a.shikimori?.rating || a.rating?.average || 0);
+            const ratingB = Number(b.shikimori?.rating || b.rating?.average || 0);
+            const favoritesA = Number(a.added_in_users_favorites || 0);
+            const favoritesB = Number(b.added_in_users_favorites || 0);
+            const scoreA = favoritesA * 0.35 + ratingA * 100;
+            const scoreB = favoritesB * 0.35 + ratingB * 100;
+            return scoreB - scoreA;
+          });
+        }
+      }
+      const page = reset ? 1 : this.state.page;
+      const list = this._rankingResults.slice((page - 1) * this.PAGE_SIZE, page * this.PAGE_SIZE);
+      const hasMore = page * this.PAGE_SIZE < this._rankingResults.length;
+      this.state.releases.push(...list);
+      this.hideSkeletons();
+      if (list.length === 0 && reset) this.showEmpty('Список пока пуст', 'Попробуйте обновить позже');
+      else if (list.length > 0) this.renderCards(list, reset);
+      this.state.page++;
+      this.updateLoadMore(hasMore);
+    } catch (e) {
+      if (requestId !== this.state.catalogRequestId) return;
+      this.hideSkeletons();
+      this.showError('Не удалось загрузить подборку.');
       this.updateLoadMore(false);
       console.error(e);
     }
@@ -760,6 +856,8 @@ const ANI = {
     else if (this.state.mode === 'ongoing') this.loadOngoing();
     else if (this.state.mode === 'genre') this.loadByGenre();
     else if (this.state.mode === 'search') this.loadSearch();
+    else if (this.state.mode === 'recommendations') this.loadRecommendations();
+    else if (this.state.mode === 'watching') this.loadWatching();
     else this.updateLoadMore(false);
   },
 
@@ -910,6 +1008,9 @@ const ANI = {
     // "Все" pill
     document.querySelector('[data-all]')?.addEventListener('click', () => {
       this.syncGenreSelection(null);
+      this.state.activeYear = null;
+      const yearSelect = document.getElementById('yearFilter');
+      if (yearSelect) yearSelect.value = '';
       if (searchInput) searchInput.value = '';
       this.state.searchQuery = '';
       this.hideSearchPreview();
@@ -954,6 +1055,9 @@ const ANI = {
     // Sidebar nav
     document.getElementById('navLatest')?.addEventListener('click', () => {
       this.syncGenreSelection(null);
+      this.state.activeYear = null;
+      const yearSelect = document.getElementById('yearFilter');
+      if (yearSelect) yearSelect.value = '';
       document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
       document.getElementById('navLatest')?.classList.add('active');
       this.switchMode('latest');
@@ -971,6 +1075,42 @@ const ANI = {
       document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
       document.getElementById('navContinue')?.classList.add('active');
       this.switchMode('continue');
+    });
+
+    document.getElementById('navRecommendations')?.addEventListener('click', () => {
+      this.syncGenreSelection(null);
+      document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
+      document.getElementById('navRecommendations')?.classList.add('active');
+      this.switchMode('recommendations');
+    });
+
+    document.getElementById('navWatching')?.addEventListener('click', () => {
+      this.syncGenreSelection(null);
+      document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
+      document.getElementById('navWatching')?.classList.add('active');
+      this.switchMode('watching');
+    });
+
+    document.getElementById('applyCatalogFilters')?.addEventListener('click', () => {
+      const year = document.getElementById('yearFilter')?.value || '';
+      this.state.activeYear = year ? Number(year) : null;
+      document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
+      if (this.state.activeGenreIds.length === 0 && !this.state.activeYear) {
+        document.getElementById('navLatest')?.classList.add('active');
+        this.switchMode('latest');
+      } else {
+        this.switchMode('genre');
+      }
+    });
+
+    document.getElementById('clearCatalogFilters')?.addEventListener('click', () => {
+      this.syncGenreSelection(null);
+      const yearSelect = document.getElementById('yearFilter');
+      if (yearSelect) yearSelect.value = '';
+      this.state.activeYear = null;
+      document.querySelectorAll('.sidebar-nav-item').forEach(i => i.classList.remove('active'));
+      document.getElementById('navLatest')?.classList.add('active');
+      this.switchMode('latest');
     });
   },
 
@@ -1372,6 +1512,7 @@ const ANI = {
 
     // Render detail panel
     this.renderDetailPanel(fullRelease);
+    this.loadSimilar(fullRelease);
     // Render episodes
     this.renderEpisodesList(fullRelease.episodes || []);
     // Update modal title
@@ -1425,7 +1566,81 @@ const ANI = {
     const time = document.getElementById('customPlayerTime');
     if (progress) progress.value = '0';
     if (time) time.textContent = '0:00 / 0:00';
+    const similarList = document.getElementById('similarList');
+    if (similarList) similarList.innerHTML = '';
     if (this.state.mode === 'continue') this.renderContinueWatching();
+  },
+
+  async loadSimilar(release) {
+    const list = document.getElementById('similarList');
+    if (!list) return;
+    const releaseId = String(release.id);
+    list.innerHTML = '<div class="similar-state">Подбор похожих...</div>';
+    const genreIds = (release.genres || []).map(genre => Number(genre.id)).filter(Boolean).slice(0, 3);
+    try {
+      let candidates = [];
+      if (genreIds.length) {
+        const data = await this.apiFetch('/anime/catalog/releases', {
+          limit: 12,
+          page: 1,
+          'f[genres]': genreIds.join(','),
+        });
+        candidates = Array.isArray(data) ? data : (data.data || data.items || []);
+      }
+      if (String(this.state.currentRelease?.id) !== releaseId) return;
+      if (candidates.length < 6) {
+        const data = await this.apiFetch('/anime/catalog/releases', {
+          limit: 12,
+          page: 1,
+          'f[sorting]': '-added_in_users_favorites',
+        });
+        const popular = Array.isArray(data) ? data : (data.data || data.items || []);
+        candidates = [...candidates, ...popular];
+      }
+
+      const releaseGenreSet = new Set((release.genres || []).map(genre => Number(genre.id)));
+      const unique = [];
+      const seen = new Set([releaseId]);
+      candidates.forEach(candidate => {
+        const candidateId = String(candidate.id);
+        if (seen.has(candidateId)) return;
+        seen.add(candidateId);
+        const score = (candidate.genres || []).reduce(
+          (total, genre) => total + (releaseGenreSet.has(Number(genre.id)) ? 1 : 0),
+          0
+        );
+        unique.push({ candidate, score });
+      });
+      unique.sort((a, b) => b.score - a.score);
+
+      list.innerHTML = '';
+      const items = unique.slice(0, 8);
+      if (items.length === 0) {
+        list.innerHTML = '<div class="similar-state">Похожие релизы не найдены</div>';
+        return;
+      }
+      items.forEach(({ candidate }) => {
+        const title = candidate.name?.main || 'Без названия';
+        const posterPath = candidate.poster?.optimized?.thumbnail
+          || candidate.poster?.thumbnail
+          || candidate.poster?.optimized?.preview
+          || candidate.poster?.preview
+          || candidate.poster?.src;
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'similar-item';
+        item.title = title;
+        item.innerHTML = `
+          ${posterPath ? `<img src="${this.IMG + posterPath}" alt="${this.esc(title)}" loading="lazy">` : '<span class="similar-placeholder">▶</span>'}
+          <span>${this.esc(title)}</span>
+        `;
+        item.addEventListener('click', () => this.openPlayer(candidate));
+        list.appendChild(item);
+      });
+    } catch (error) {
+      list.innerHTML = '<div class="similar-state">Не удалось загрузить подборку</div>';
+      console.warn('Similar releases failed:', error);
+    }
   },
 
   renderDetailPanel(r) {
